@@ -112,15 +112,19 @@ func Generate(tpset *structer.TypePackageSet, dctvCache *DirectivesCache, config
 		{ // generate temp file of joined definitions
 			fmt.Printf("\n======= %s %s\n", opkg, tfn)
 
-			fmt.Fprintf(tf, "// +build ignore %s\n\n", lpkg)
+			fmt.Fprintf(tf, "// +build ignore\n\n")
 			fmt.Fprintf(tf, "package %s\n\n", lpkg)
 
+			for _, d := range dctv.directives {
+				outputParts = append(outputParts, d.String())
+			}
+
+			// consistent output ordering of temporary file should
+			// hopefully yield consistent generated code
+			sort.Strings(outputParts)
 			for _, s := range outputParts {
 				fmt.Fprintln(tf, s)
 				fmt.Fprintln(tf)
-			}
-			for _, d := range dctv.directives {
-				fmt.Fprintln(tf, d.String())
 			}
 			fmt.Fprintln(tf)
 		}

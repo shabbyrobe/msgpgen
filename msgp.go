@@ -2,6 +2,7 @@ package msgpgen
 
 import (
 	"bytes"
+	"math/rand"
 	"regexp"
 	"strings"
 
@@ -61,9 +62,17 @@ func ParseTag(tag string) (t structtag.Tag) {
 	return *msgpTag
 }
 
-// runMsgp runs msgp's generator, capturing the output
+// runMsgp runs msgp's generator, capturing the output.
+// WARNING! This will reseed the global RNG to a deterministic
+// value while it is running!
 func runMsgp(inputFile, outputFile string, config Config) (stdout, stderr bytes.Buffer, err error) {
 	return captureStdio(func() error {
+		newSeed := rand.Int63()
+		rand.Seed(0)
+		defer func() {
+			rand.Seed(newSeed)
+		}()
+
 		msgpfs, err := parse.File(inputFile, config.Unexported)
 		if err != nil {
 			return err
