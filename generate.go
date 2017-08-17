@@ -121,7 +121,7 @@ func Generate(tpset *structer.TypePackageSet, dctvCache *DirectivesCache, config
 
 			// consistent output ordering of temporary file should
 			// hopefully yield consistent generated code
-			sort.Strings(outputParts)
+			sortOutput(outputParts)
 			for _, s := range outputParts {
 				fmt.Fprintln(tf, s)
 				fmt.Fprintln(tf)
@@ -188,4 +188,19 @@ func Generate(tpset *structer.TypePackageSet, dctvCache *DirectivesCache, config
 	}
 
 	return nil
+}
+
+func outputPriority(part string) int {
+	if strings.HasPrefix(strings.TrimSpace(part), "//msgp:shim ") {
+		return 1
+	}
+	return 2
+}
+
+func sortOutput(outputParts []string) {
+	sort.Slice(outputParts, func(i, j int) bool {
+		ap := outputPriority(outputParts[i])
+		bp := outputPriority(outputParts[j])
+		return ap < bp || (ap == bp && outputParts[i] < outputParts[j])
+	})
 }
