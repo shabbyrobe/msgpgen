@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"github.com/pkg/errors"
@@ -77,7 +78,16 @@ func Generate(tpset *structer.TypePackageSet, dctvCache *DirectivesCache, config
 		defer cleanup.Cleanup(&err)
 	}
 
-	for opkg, v := range ex.tempOutput {
+	// need to ensure sorted order when iterating over temp output
+	var tempKeys []string
+	for opkg := range ex.tempOutput {
+		tempKeys = append(tempKeys, opkg)
+	}
+	sort.Strings(tempKeys)
+
+	for _, opkg := range tempKeys {
+		outputParts := ex.tempOutput[opkg]
+
 		lpkg := filepath.Base(opkg)
 
 		// FIXME: panic risk
@@ -105,7 +115,7 @@ func Generate(tpset *structer.TypePackageSet, dctvCache *DirectivesCache, config
 			fmt.Fprintf(tf, "// +build ignore %s\n\n", lpkg)
 			fmt.Fprintf(tf, "package %s\n\n", lpkg)
 
-			for _, s := range v {
+			for _, s := range outputParts {
 				fmt.Fprintln(tf, s)
 				fmt.Fprintln(tf)
 			}
