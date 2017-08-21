@@ -48,14 +48,14 @@ var (
 	msgpPrefixJunk = chalk.ResetColor.String()
 )
 
-// ParseTag parses the `msgp:"..."` struct tag
+// ParseTag parses the `msg:"..."` struct tag
 func ParseTag(tag string) (t structtag.Tag) {
 	// structtag errors are unhelpful and unmatchable, just ignore them.
 	tags, err := structtag.Parse(tag)
 	if err != nil {
 		return
 	}
-	msgpTag, _ := tags.Get("msgp")
+	msgpTag, _ := tags.Get("msg")
 	if msgpTag == nil {
 		return
 	}

@@ -12,7 +12,6 @@ type msgpTypeVisitor struct {
 	currentPkg string
 	tpset      *structer.TypePackageSet
 	typeQueue  *TypeQueue
-	depth      int
 }
 
 func newMsgpTypeVisitor(tpset *structer.TypePackageSet, typeQueue *TypeQueue) *msgpTypeVisitor {
@@ -22,12 +21,23 @@ func newMsgpTypeVisitor(tpset *structer.TypePackageSet, typeQueue *TypeQueue) *m
 	}
 
 	mtv.PartialTypeVisitor = structer.PartialTypeVisitor{
+		// need to track struct field stack to build these ignored messages
+		// it outputs the nested struct as ignored if all its members are ignored.
+		// test.go: Foo: Baz: ignored.
+		// test.go: Foo: Qux: Ding: ignored.
+		// test.go: Foo: Qux: Z: Dong: ignored.
+		// test.go: Foo: Qux: Z: ignored.
+		// test.go: Foo: Qux: ignored.
 		EnterStructFunc: func(s structer.StructInfo) error {
-			mtv.depth++
 			return nil
 		},
 		LeaveStructFunc: func(s structer.StructInfo) error {
-			mtv.depth++
+			return nil
+		},
+		EnterFieldFunc: func(s structer.StructInfo, field *types.Var, tag string) error {
+			return nil
+		},
+		LeaveFieldFunc: func(s structer.StructInfo, field *types.Var, tag string) error {
 			return nil
 		},
 

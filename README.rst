@@ -22,10 +22,25 @@ It adds:
   containing a whitelist, or searching for all types that implement an
   interface.
 
-It does not yet support:
+It has the following issues (which should all be fixed at some point):
 
-- Limiting the import recursion. ``msgpgen`` will blindly traverse any user
+- Import recursion is not limited. ``msgpgen`` will blindly traverse any user
   package it finds in your gopath and will generate code into it.
+
+- Ignored fields (with the tag `msg:"-"`) produce a warning in the output which
+  is not currently quashed.
+
+We may be able to support:
+
+- #163 Embedded fields behaviour
+
+It solves the following issues in the msgp tracker:
+
+- #183 Generator output severity labels
+- #158 Workaround for types that are defined in another package?
+- #141 Directive ignore all
+- #128 Best effort warnings re: external types
+- #47 Keep track of imports (boy does it ever do that)
 
 
 Using
