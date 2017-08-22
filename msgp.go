@@ -128,25 +128,32 @@ func checkMsgpOutput(tpset *structer.TypePackageSet, dctvs *Directives, seen map
 
 var ptnUnresolvedIdentifier = regexp.MustCompile(`(?:unresolved|non-local) identifier:\s*([^ ]+)`)
 
+// TODO: need to do a better job of making sure this is expected. See the
+// note in structwalker.go.
+var ptnIgnoredField = regexp.MustCompile(`: ignored\.`)
+
 // msgp's generator emits an "unresolved identifier" warning or a "non-local
 // identifier" warning even if we specify a type has an explicit "msgp:ignore"
 // or "msgp:shim" directive
 func isIgnoredUnresolved(tpset *structer.TypePackageSet, dctvs *Directives, seen map[string]bool, line string) bool {
 	m := ptnUnresolvedIdentifier.FindStringSubmatch(line)
-	if len(m) < 2 {
-		panic(errors.Errorf("Unreadable 'unresolved' line: '%s'", line))
-	}
-	unresolved := strings.TrimSpace(m[1])
-	if seen[unresolved] {
-		return true
-	}
-	for _, v := range dctvs.ignore {
-		if unresolved == v {
+	if len(m) == 2 {
+		unresolved := strings.TrimSpace(m[1])
+		if seen[unresolved] {
 			return true
 		}
+		for _, v := range dctvs.ignore {
+			if unresolved == v {
+				return true
+			}
+		}
+		return false
 	}
-	// if _, ok := dctvs.shim[unresolved]; ok {
-	//     return true
-	// }
-	return false
+
+	im := ptnIgnoredField.MatchString(line)
+	if im {
+		return true
+	}
+
+	panic(errors.Errorf("Unreadable 'unresolved' line: '%s'", line))
 }
