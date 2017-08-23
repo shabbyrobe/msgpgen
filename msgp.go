@@ -30,6 +30,7 @@ var primitives = map[string]gen.Primitive{
 	"uint32":         gen.Uint32,
 	"uint64":         gen.Uint64,
 	"byte":           gen.Byte,
+	"rune":           gen.Int32,
 	"int":            gen.Int,
 	"int8":           gen.Int8,
 	"int16":          gen.Int16,
