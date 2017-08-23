@@ -30,19 +30,6 @@ func NewDirectives(tpset *structer.TypePackageSet, pkg string) *Directives {
 		shim:   make(map[string]*ShimDirective),
 		pkg:    pkg,
 	}
-
-	// See https://github.com/tinylib/msgp/pull/188
-	d.add(&ShimDirective{
-		Type:     "rune",
-		ToFunc:   "int32",
-		FromFunc: "rune",
-		As:       "int32",
-		Mode:     Cast,
-	})
-	d.add(&IgnoreDirective{
-		Types: []string{"rune"},
-	})
-
 	return d
 }
 

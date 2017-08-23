@@ -189,12 +189,6 @@ func (e *extractor) extract() error {
 			}
 
 		case *types.Basic:
-			if ft.Underlying().String() == "rune" {
-				// FIXME: Rune hacks abound. see newDirectives() for more details.
-				fmt.Println("RUNES ARE A BIT OF A HACK")
-				continue
-			}
-
 			// we should not see Basic types here - it should be caught further up
 			// when we check the directly supported primitives.
 			panic(fmt.Errorf("unsupported basic type: %s %T", ft.Underlying(), ft))
