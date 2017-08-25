@@ -58,6 +58,8 @@ func ParseDirective(input string) (Directive, error) {
 		directive = &ShimDirective{}
 	case "ignore":
 		directive = &IgnoreDirective{}
+	case "intercept":
+		directive = &InterceptDirective{}
 	case "tuple":
 		directive = &TupleDirective{}
 	case "map":
@@ -122,6 +124,44 @@ func (i *MapDirective) Populate(args []string, kwargs map[string]string) error {
 
 func (i MapDirective) String() string {
 	return "//msgp:map " + strings.Join(i.Types, " ")
+}
+
+//msgp:shim {Type} using:{Func}
+type InterceptDirective struct {
+	Type  string
+	Using string
+}
+
+func (i InterceptDirective) String() string {
+	return fmt.Sprintf(
+		"//msgp:intercept %s using:%s",
+		i.Type,
+		i.Using,
+	)
+}
+
+func (i *InterceptDirective) Populate(args []string, kwargs map[string]string) error {
+	var ok bool
+
+	{ // type
+		if len(args) != 1 {
+			return errors.Errorf("invalid intercept directive - expected one arg, found %d", len(args))
+		}
+		i.Type = args[0]
+	}
+
+	{ // as
+		if i.Using, ok = kwargs["using"]; !ok {
+			return errors.Errorf("missing using: in intercept")
+		}
+		delete(kwargs, "using")
+	}
+
+	if len(kwargs) > 0 {
+		return errors.Errorf("unknown keys")
+	}
+
+	return nil
 }
 
 //msgp:shim {Type} as:{Newtype} using:{toFunc/fromFunc} mode:convert

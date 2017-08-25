@@ -17,6 +17,8 @@ type Directives struct {
 	// in the directive
 	ignore map[string]string
 
+	intercepted map[string]string
+
 	tuple map[string]string
 	shim  map[string]*ShimDirective
 	pkg   string
@@ -24,11 +26,12 @@ type Directives struct {
 
 func NewDirectives(tpset *structer.TypePackageSet, pkg string) *Directives {
 	d := &Directives{
-		tpset:  tpset,
-		ignore: make(map[string]string),
-		tuple:  make(map[string]string),
-		shim:   make(map[string]*ShimDirective),
-		pkg:    pkg,
+		tpset:       tpset,
+		ignore:      make(map[string]string),
+		intercepted: make(map[string]string),
+		tuple:       make(map[string]string),
+		shim:        make(map[string]*ShimDirective),
+		pkg:         pkg,
 	}
 	return d
 }
@@ -56,6 +59,13 @@ func (d *Directives) add(dir Directive) error {
 			return err
 		}
 		d.shim[ipkg] = dir
+
+	case *InterceptDirective:
+		ipkg, err := d.tpset.FindImportPath(d.pkg, dir.Type)
+		if err != nil {
+			return err
+		}
+		d.intercepted[ipkg] = dir.Type
 
 	case *IgnoreDirective:
 		for _, t := range dir.Types {

@@ -179,6 +179,10 @@ func (e *extractor) extract() error {
 					return err
 				}
 
+			} else if e.isIntercepted(tqi.OriginPkg, ft.String()) {
+				// ignore for now, but eventually we can walk the list of implemented interfaces
+				// to find types that implement the intercepted interface
+
 			} else if _, ok := primitives[ft.Underlying().String()]; ok && ft.Underlying().String() != "interface{}" {
 				if err := e.extractShimmedSupported(tqi, pkg, ft); err != nil {
 					return err
@@ -199,4 +203,17 @@ func (e *extractor) extract() error {
 	}
 
 	return nil
+}
+
+func (e *extractor) isIntercepted(origin string, ft string) bool {
+	if e.tpset.Kinds[origin] == structer.UserPackage {
+		originDctvs, err := e.dctvCache.Ensure(origin)
+		if err != nil {
+			panic(err)
+		}
+
+		_, ok := originDctvs.intercepted[ft]
+		return ok
+	}
+	return false
 }
