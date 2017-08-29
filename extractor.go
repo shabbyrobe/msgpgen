@@ -183,10 +183,14 @@ func (e *extractor) extract() error {
 				// ignore for now, but eventually we can walk the list of implemented interfaces
 				// to find types that implement the intercepted interface
 
-			} else if _, ok := primitives[ft.Underlying().String()]; ok && ft.Underlying().String() != "interface{}" {
+			} else if _, ok := primitives[ft.Underlying().String()]; ok && !types.IsInterface(ft.Underlying()) {
 				if err := e.extractShimmedSupported(tqi, pkg, ft); err != nil {
 					return err
 				}
+
+			} else if isNamedCompoundType(ft) {
+				// seems to work OK if we just do nothing here. i thought we might need to
+				// extract the definition but I think that happens elsewhere.
 
 			} else {
 				panic(fmt.Errorf("named unsupported type '%s', underlying '%s', originating '%s'", ft, ft.Underlying(), tqi.OriginPkg))
@@ -214,6 +218,25 @@ func (e *extractor) isIntercepted(origin string, ft string) bool {
 
 		_, ok := originDctvs.intercepted[ft]
 		return ok
+	}
+	return false
+}
+
+func isNamedCompoundType(t types.Type) bool {
+	_, ok := t.(*types.Named)
+	if !ok {
+		return false
+	}
+
+	switch t.Underlying().(type) {
+	case *types.Array:
+		return true
+	case *types.Slice:
+		return true
+	case *types.Map:
+		return true
+	case *types.Chan:
+		return true
 	}
 	return false
 }
