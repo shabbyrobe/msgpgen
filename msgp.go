@@ -148,6 +148,11 @@ func isIgnoredUnresolved(tpset *structer.TypePackageSet, dctvs *Directives, seen
 				return true
 			}
 		}
+		for _, v := range dctvs.intercepted {
+			if unresolved == v {
+				return true
+			}
+		}
 		return false
 	}
 
