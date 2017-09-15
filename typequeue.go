@@ -1,6 +1,7 @@
 package msgpgen
 
 import (
+	"bytes"
 	"fmt"
 	"go/types"
 
@@ -79,6 +80,24 @@ type TypeQueueItem struct {
 	Name      string
 	Obj       types.Object
 	Type      types.Type
+	Parents   []types.Type
+}
+
+func (tqi *TypeQueueItem) SetParents(parents []types.Type) *TypeQueueItem {
+	tqi.Parents = make([]types.Type, len(parents))
+	copy(tqi.Parents, parents)
+	return tqi
+}
+
+func (tqi *TypeQueueItem) ParentsString() string {
+	var buf bytes.Buffer
+	for i, parent := range tqi.Parents {
+		if i > 0 {
+			buf.WriteString(" -> ")
+		}
+		buf.WriteString(parent.String())
+	}
+	return buf.String()
 }
 
 func (tqi *TypeQueueItem) Key() string {

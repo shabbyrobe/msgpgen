@@ -43,12 +43,12 @@ func newMsgpTypeVisitor(tpset *structer.TypePackageSet, typeQueue *TypeQueue) *m
 	}
 
 	mtv.PartialTypeVisitor.VisitBasicFunc = func(ctx structer.WalkContext, t *types.Basic) error {
-		mtv.typeQueue.AddType(mtv.currentPkg, t.String(), t)
+		mtv.typeQueue.AddType(mtv.currentPkg, t.String(), t).SetParents(ctx.Stack())
 		return nil
 	}
 
 	mtv.PartialTypeVisitor.VisitNamedFunc = func(ctx structer.WalkContext, t *types.Named) error {
-		mtv.typeQueue.AddType(mtv.currentPkg, t.String(), t)
+		mtv.typeQueue.AddType(mtv.currentPkg, t.String(), t).SetParents(ctx.Stack())
 
 		if isNamedCompoundType(t) {
 			// Compound named types need to be walked as well, i.e.

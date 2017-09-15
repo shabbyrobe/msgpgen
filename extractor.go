@@ -199,10 +199,10 @@ func (e *extractor) extract() error {
 		case *types.Basic:
 			// we should not see Basic types here - it should be caught further up
 			// when we check the directly supported primitives.
-			panic(fmt.Errorf("unsupported basic type: %s %T", ft.Underlying(), ft))
+			panic(fmt.Errorf("unsupported basic type: %s %T, parents: %s", ft.Underlying(), ft, tqi.ParentsString()))
 
 		default:
-			panic(fmt.Errorf("main unsupported type: %s %T", ft.Underlying(), ft))
+			panic(fmt.Errorf("main unsupported type: %s %T, parents: %s", ft.Underlying(), ft, tqi.ParentsString()))
 		}
 	}
 
