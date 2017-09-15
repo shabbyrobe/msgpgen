@@ -29,25 +29,25 @@ func newMsgpTypeVisitor(tpset *structer.TypePackageSet, typeQueue *TypeQueue) *m
 	// test.go: Foo: Qux: Z: Dong: ignored.
 	// test.go: Foo: Qux: Z: ignored.
 	// test.go: Foo: Qux: ignored.
-	mtv.PartialTypeVisitor.EnterStructFunc = func(s structer.StructInfo) error {
+	mtv.PartialTypeVisitor.EnterStructFunc = func(ctx structer.WalkContext, s structer.StructInfo) error {
 		return nil
 	}
-	mtv.PartialTypeVisitor.LeaveStructFunc = func(s structer.StructInfo) error {
+	mtv.PartialTypeVisitor.LeaveStructFunc = func(ctx structer.WalkContext, s structer.StructInfo) error {
 		return nil
 	}
-	mtv.PartialTypeVisitor.EnterFieldFunc = func(s structer.StructInfo, field *types.Var, tag string) error {
+	mtv.PartialTypeVisitor.EnterFieldFunc = func(ctx structer.WalkContext, s structer.StructInfo, field *types.Var, tag string) error {
 		return nil
 	}
-	mtv.PartialTypeVisitor.LeaveFieldFunc = func(s structer.StructInfo, field *types.Var, tag string) error {
+	mtv.PartialTypeVisitor.LeaveFieldFunc = func(ctx structer.WalkContext, s structer.StructInfo, field *types.Var, tag string) error {
 		return nil
 	}
 
-	mtv.PartialTypeVisitor.VisitBasicFunc = func(t *types.Basic) error {
+	mtv.PartialTypeVisitor.VisitBasicFunc = func(ctx structer.WalkContext, t *types.Basic) error {
 		mtv.typeQueue.AddType(mtv.currentPkg, t.String(), t)
 		return nil
 	}
 
-	mtv.PartialTypeVisitor.VisitNamedFunc = func(t *types.Named) error {
+	mtv.PartialTypeVisitor.VisitNamedFunc = func(ctx structer.WalkContext, t *types.Named) error {
 		mtv.typeQueue.AddType(mtv.currentPkg, t.String(), t)
 
 		if isNamedCompoundType(t) {
