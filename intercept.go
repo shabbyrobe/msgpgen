@@ -9,7 +9,6 @@ import (
 	"strings"
 	"text/template"
 
-	"github.com/davecgh/go-spew/spew"
 	"github.com/pkg/errors"
 	"github.com/shabbyrobe/structer"
 	"github.com/tinylib/msgp/gen"
@@ -49,7 +48,10 @@ func genIntercept(pkg string, directives *Directives, state *State, iface *iface
 				return
 			}
 			ptr = true
-			spew.Dump(tn)
+		}
+
+		if _, ok := directives.ignore[tn]; ok {
+			continue
 		}
 
 		id, ok := state.Types[tn]
@@ -156,10 +158,11 @@ func (m *{{.MapperType}}) DecodeMsg(dc *msgp.Reader) (t {{.OutType}}, err error)
 			{{- end }}
 
 			{{- else }}
-			t = {{if .Pointer}}&{{end}}{{.ImportName}}{}
-			if err = t.DecodeMsg(dc); err != nil {
+			v := {{if .Pointer}}&{{end}}{{.ImportName}}{}
+			if err = v.DecodeMsg(dc); err != nil {
 				return
 			}
+			t = v
 			{{- end }}
 		{{- end }}
 		default:
@@ -210,7 +213,7 @@ func (m *{{.MapperType}}) UnmarshalMsg(bts []byte) (t {{.OutType}}, o []byte, er
 			{{- end }}
 
 			{{- else }}
-			v := {{if .Pointer}}&{{end}}{{.ImportName}}
+			v := {{if .Pointer}}&{{end}}{{.ImportName}}{}
 			t = v
 			o, err = v.UnmarshalMsg(o)
 			{{- end }}
@@ -289,7 +292,7 @@ func (m *{{.MapperType}}) MarshalMsg(t {{.OutType}}, b []byte) (o []byte, err er
 		{{- end }}
 
 		{{- else }}
-		err = t.MarshalMsg(o)
+		o, err = t.MarshalMsg(o)
 		{{- end}}
 
 	{{- end }}

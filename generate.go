@@ -197,6 +197,7 @@ func Generate(tpset *structer.TypePackageSet, state *State, dctvCache *Directive
 							panic(cerr)
 						}
 					}()
+					sortOutput(extra)
 					for _, e := range extra {
 						if _, err = f.WriteString(e); err != nil {
 							panic(err)

@@ -48,6 +48,8 @@ func LoadStateFromFile(file string) (*State, error) {
 		if err := json.NewDecoder(f).Decode(state); err != nil {
 			return nil, err
 		}
+	} else {
+		state.New = true
 	}
 	if err := state.Init(); err != nil {
 		return nil, err
@@ -57,7 +59,8 @@ func LoadStateFromFile(file string) (*State, error) {
 
 type State struct {
 	Types  StateTypes
-	NextID int `json:"-"`
+	NextID int  `json:"-"`
+	New    bool `json:"-"`
 }
 
 func (s *State) SaveToFile(file string) (err error) {
