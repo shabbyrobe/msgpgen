@@ -15,22 +15,22 @@ type Directives struct {
 
 	// Maps fully qualified type names to the locally referenced name
 	// in the directive
-	ignore map[string]string
+	ignore map[structer.TypeName]string
 
-	intercepted map[string]string
+	intercepted map[structer.TypeName]string
 
-	tuple map[string]string
-	shim  map[string]*ShimDirective
+	tuple map[structer.TypeName]string
+	shim  map[structer.TypeName]*ShimDirective
 	pkg   string
 }
 
 func NewDirectives(tpset *structer.TypePackageSet, pkg string) *Directives {
 	d := &Directives{
 		tpset:       tpset,
-		ignore:      make(map[string]string),
-		intercepted: make(map[string]string),
-		tuple:       make(map[string]string),
-		shim:        make(map[string]*ShimDirective),
+		ignore:      make(map[structer.TypeName]string),
+		intercepted: make(map[structer.TypeName]string),
+		tuple:       make(map[structer.TypeName]string),
+		shim:        make(map[structer.TypeName]*ShimDirective),
 		pkg:         pkg,
 	}
 	return d
@@ -49,44 +49,46 @@ func (d *Directives) load() error {
 	return nil
 }
 
-func (d *Directives) add(dir Directive) error {
-	d.directives = append(d.directives, dir)
+func (d *Directives) add(dirs ...Directive) error {
+	for _, dir := range dirs {
+		d.directives = append(d.directives, dir)
 
-	switch dir := dir.(type) {
-	case *ShimDirective:
-		ipkg, err := d.tpset.FindImportPath(d.pkg, dir.Type)
-		if err != nil {
-			return err
-		}
-		d.shim[ipkg] = dir
-
-	case *InterceptDirective:
-		ipkg, err := d.tpset.FindImportPath(d.pkg, dir.Type)
-		if err != nil {
-			return err
-		}
-		d.intercepted[ipkg] = dir.Type
-
-	case *IgnoreDirective:
-		for _, t := range dir.Types {
-			ipkg, err := d.tpset.FindImportPath(d.pkg, t)
+		switch dir := dir.(type) {
+		case *ShimDirective:
+			tn, err := structer.ParseLocalName(dir.Type, d.pkg)
 			if err != nil {
 				return err
 			}
-			d.ignore[ipkg] = t
-		}
+			d.shim[tn] = dir
 
-	case *TupleDirective:
-		for _, t := range dir.Types {
-			ipkg, err := d.tpset.FindImportPath(d.pkg, t)
+		case *InterceptDirective:
+			tn, err := structer.ParseLocalName(dir.Type, d.pkg)
 			if err != nil {
 				return err
 			}
-			d.tuple[ipkg] = t
-		}
+			d.intercepted[tn] = dir.Type
 
-	default:
-		return errors.Errorf("Unknown msgp directive %+v", dir)
+		case *IgnoreDirective:
+			for _, t := range dir.Types {
+				tn, err := structer.ParseLocalName(t, d.pkg)
+				if err != nil {
+					return err
+				}
+				d.ignore[tn] = t
+			}
+
+		case *TupleDirective:
+			for _, t := range dir.Types {
+				tn, err := structer.ParseLocalName(t, d.pkg)
+				if err != nil {
+					return err
+				}
+				d.tuple[tn] = t
+			}
+
+		default:
+			return errors.Errorf("Unknown msgp directive %+v", dir)
+		}
 	}
 	return nil
 }
@@ -136,19 +138,15 @@ func NewDirectivesCache(tpset *structer.TypePackageSet) *DirectivesCache {
 	}
 }
 
-func (d *DirectivesCache) Ignored(dctvs *Directives, fullName string) bool {
+func (d *DirectivesCache) Ignored(dctvs *Directives, fullName structer.TypeName) bool {
 	if _, ok := dctvs.ignore[fullName]; ok {
 		return true
 	}
 	return false
 }
 
-func (d *DirectivesCache) IgnoredPkg(fullName string) (bool, error) {
-	tn, err := structer.ParseTypeName(fullName)
-	if err != nil {
-		return false, err
-	}
-	dctvs, err := d.Ensure(tn.PackagePath)
+func (d *DirectivesCache) IgnoredPkg(fullName structer.TypeName) (bool, error) {
+	dctvs, err := d.Ensure(fullName.PackagePath)
 	if err != nil {
 		return false, err
 	}

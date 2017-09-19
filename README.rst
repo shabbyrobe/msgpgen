@@ -9,12 +9,19 @@ It supports:
 
 - All the same arguments as the old generator
 
+It differs:
+
+- ``ignore`` and ``shim`` directives must be declared using the full package
+  path.
+
 It adds:
 
 - Support for non-local identifiers, by simply generating the code for those
   identifiers in the relevant package.
 
 - Automatic shimming of primitives
+
+- Automatic handling of interface types
 
 - Silencing spurious warnings
 
@@ -55,15 +62,4 @@ use the following::
 
 .. warning:: The recursion is not currenty limited by the -import flag, though
    it will be.
-
-
-To generate msgpack for all types listed in ``myfile.tsv``, then recursively
-generate all types in other packages in your GOPATH that those types reference,
-use the following::
-
-    //go:generate msgpgen -mode tsv -file mytypes.tsv
-
-Entries in the tsv file must be in the format ``full/path/to/package.Type``.
-TSV files are split by spaces or tabs, like awk, and the column can be specified
-using the 1-indexed ``-col`` argument.
 

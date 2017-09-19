@@ -5,11 +5,9 @@ import (
 	"bytes"
 	"flag"
 	"go/types"
-	"io"
 	"log"
 	"os"
 	"os/exec"
-	"regexp"
 	"strings"
 
 	"github.com/pkg/errors"
@@ -30,11 +28,9 @@ func (s *stringList) Set(v string) error {
 }
 
 type LoaderConfig struct {
-	Mode      string
-	Interface string
-	File      string
-	Col       int
-	Imports   stringList
+	Interfaces stringList
+	State      string
+	Imports    stringList
 }
 
 func main() {
@@ -50,10 +46,8 @@ func main() {
 	flags.StringVar(&config.TestTemplate, "testtpl", config.TestTemplate, "Template of generated test file name")
 
 	loader := LoaderConfig{}
-	flags.StringVar(&loader.Mode, "mode", "iface", "Use this mode to search for types. Modes: iface, tsv")
-	flags.StringVar(&loader.Interface, "iface", "", "Search for types that implement this interface for generation. Required in iface mode.")
-	flags.StringVar(&loader.File, "file", "", "Input file containing types to generate. Required in tsv mode. Pass '-' for stdin.")
-	flags.IntVar(&loader.Col, "col", 1, "If using tsv mode, use this 1-indexed whitespace separated column")
+	flags.StringVar(&loader.State, "state", "", "State file for mapping polymorphic types")
+	flags.Var(&loader.Interfaces, "ifaces", "Search for types that implement this interface for generation. Comma separated list.")
 	flags.Var(&loader.Imports, "import", "Import these packages to search for types. Comma separated list. Uses go list.")
 
 	if err := flags.Parse(os.Args[1:]); err != nil {
@@ -64,91 +58,55 @@ func main() {
 	}
 }
 
-func findIfaces(tpset *structer.TypePackageSet, iface structer.TypeName) ([]structer.TypeName, error) {
+func findIfaces(tpset *structer.TypePackageSet, ifaces ...structer.TypeName) ([]structer.TypeName, error) {
 	var allNamed []*types.Named
 	var ifaceNamed *types.Named
 	var ts []structer.TypeName
 
-	for _, pkg := range tpset.TypePackages {
-		for _, name := range pkg.Scope().Names() {
-			if obj, ok := pkg.Scope().Lookup(name).(*types.TypeName); ok {
-				nn, ok := obj.Type().(*types.Named)
-				if ok {
-					if nn.String() == iface.String() && types.IsInterface(obj.Type()) {
-						ifaceNamed = nn
-					} else {
-						if _, ok := obj.Type().Underlying().(*types.Struct); ok {
-							allNamed = append(allNamed, nn)
+	for _, iface := range ifaces {
+		for _, pkg := range tpset.TypePackages {
+			for _, name := range pkg.Scope().Names() {
+				if obj, ok := pkg.Scope().Lookup(name).(*types.TypeName); ok {
+					nn, ok := obj.Type().(*types.Named)
+					if ok {
+						if nn.String() == iface.String() && types.IsInterface(obj.Type()) {
+							ifaceNamed = nn
+						} else {
+							if _, ok := obj.Type().Underlying().(*types.Struct); ok {
+								allNamed = append(allNamed, nn)
+							}
 						}
 					}
 				}
 			}
 		}
-	}
 
-	if ifaceNamed == nil {
-		return nil, errors.Errorf("interface %s not found in imported packages", iface)
-	}
+		if ifaceNamed == nil {
+			return nil, errors.Errorf("interface %s not found in imported packages", iface)
+		}
 
-	for _, T := range allNamed {
-		if T == ifaceNamed || types.IsInterface(T) {
-			continue
-		}
-		found := false
-		if types.AssignableTo(T, ifaceNamed) {
-			// fmt.Printf("%s satisfies %s\n", T, ifaceNamed)
-			found = true
-		} else if types.AssignableTo(types.NewPointer(T), ifaceNamed) {
-			// fmt.Printf("%s satisfies %s\n", types.NewPointer(T), ifaceNamed)
-			found = true
-		}
-		if found {
-			tn, err := structer.ParseTypeName(T.String())
-			if err != nil {
-				return nil, errors.Wrapf(err, "could not parse found type name %s", tn)
+		for _, T := range allNamed {
+			if T == ifaceNamed || types.IsInterface(T) {
+				continue
 			}
-			ts = append(ts, tn)
+			found := false
+			if types.AssignableTo(T, ifaceNamed) {
+				// fmt.Printf("%s satisfies %s\n", T, ifaceNamed)
+				found = true
+			} else if types.AssignableTo(types.NewPointer(T), ifaceNamed) {
+				// fmt.Printf("%s satisfies %s\n", types.NewPointer(T), ifaceNamed)
+				found = true
+			}
+			if found {
+				tn, err := structer.ParseTypeName(T.String())
+				if err != nil {
+					return nil, errors.Wrapf(err, "could not parse found type name %s", tn)
+				}
+				ts = append(ts, tn)
+			}
 		}
 	}
 	return ts, nil
-}
-
-func findTSV(file string, col int) ([]structer.TypeName, error) {
-	var rdr io.Reader
-	if file == "-" {
-		rdr = os.Stdin
-	} else {
-		f, err := os.Open(file)
-		if err != nil {
-			return nil, err
-		}
-		rdr = f
-		defer f.Close()
-	}
-
-	split := regexp.MustCompile(`\s+`)
-	scanner := bufio.NewScanner(rdr)
-	types := []structer.TypeName{}
-
-	for scanner.Scan() {
-		line := strings.TrimSpace(scanner.Text())
-		if len(line) == 0 {
-			continue
-		}
-		if strings.HasPrefix(line, "//") {
-			continue
-		}
-		t := split.Split(line, -1)[col-1]
-		tn, err := structer.ParseTypeName(t)
-		if err != nil {
-			return nil, err
-		}
-		types = append(types, tn)
-	}
-	if err := scanner.Err(); err != nil {
-		return nil, err
-	}
-	return types, nil
 }
 
 func goList(pkgs stringList) ([]string, error) {
@@ -157,13 +115,14 @@ func goList(pkgs stringList) ([]string, error) {
 	args = append(args, pkgs...)
 	cmd := exec.Command("go", args...)
 
-	var out bytes.Buffer
-	cmd.Stdout = &out
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout, cmd.Stderr = &stdout, &stderr
 	err := cmd.Run()
 	if err != nil {
-		return nil, err
+		errMsg := stderr.String()
+		return nil, errors.Wrap(err, errMsg)
 	}
-	scanner := bufio.NewScanner(&out)
+	scanner := bufio.NewScanner(&stdout)
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
 		if len(line) == 0 {
@@ -186,6 +145,11 @@ func run(loader LoaderConfig, config msgpgen.Config, args []string) error {
 		return errors.Wrapf(err, "go list failed")
 	}
 
+	// b, _ := json.Marshal(state)
+	// var out bytes.Buffer
+	// json.Indent(&out, b, "", "  ")
+	// fmt.Println(out.String())
+
 	for _, imp := range imports {
 		// should be safe to ignore import errors - it will raise issues
 		// if there are any type resolution errors at all, which we don't
@@ -194,31 +158,41 @@ func run(loader LoaderConfig, config msgpgen.Config, args []string) error {
 		_, _ = tpset.Import(imp)
 	}
 
-	var types []structer.TypeName
-	switch loader.Mode {
-	case "iface":
-		if len(loader.Interface) == 0 {
-			return errors.Errorf("-iface arg required when using mode iface")
+	var state *msgpgen.State
+	if loader.State != "" {
+		if state, err = msgpgen.LoadStateFromFile(loader.State); err != nil {
+			return err
 		}
-		tn, err := structer.ParseTypeName(loader.Interface)
+	}
+
+	var types []structer.TypeName
+	if len(loader.Interfaces) == 0 {
+		return errors.Errorf("-ifaces arg required")
+	}
+
+	var ifaceNames []structer.TypeName
+	for _, i := range loader.Interfaces {
+		tn, err := structer.ParseTypeName(i)
 		if err != nil {
 			return errors.Wrapf(err, "could not parse iface type name %s", tn)
 		}
-		types, err = findIfaces(tpset, tn)
-		if err != nil {
-			return err
-		}
+		ifaceNames = append(ifaceNames, tn)
+	}
 
-	case "tsv":
-		types, err = findTSV(loader.File, loader.Col)
-		if err != nil {
-			return errors.Wrap(err, "could not find TSV")
-		}
-
-	default:
-		return errors.Errorf("unknown loader mode %s", loader.Mode)
+	types, err = findIfaces(tpset, ifaceNames...)
+	if err != nil {
+		return err
 	}
 
 	config.Types = types
-	return msgpgen.Generate(tpset, dctvCache, config)
+	if err := msgpgen.Generate(tpset, state, dctvCache, config); err != nil {
+		return err
+	}
+
+	if loader.State != "" {
+		if err := state.SaveToFile(loader.State); err != nil {
+			return err
+		}
+	}
+	return nil
 }
