@@ -100,7 +100,7 @@ func FindIfaces(tpset *structer.TypePackageSet, ifaces ...structer.TypeName) ([]
 	return ts, nil
 }
 
-func GoList(pkgs StringList) ([]string, error) {
+func GoList(pkgs []string) ([]string, error) {
 	var l []string
 	var args = []string{"list"}
 	args = append(args, pkgs...)
