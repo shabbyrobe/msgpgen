@@ -83,6 +83,14 @@ type TypeQueueItem struct {
 	Parents   []types.Type
 }
 
+func (tqi *TypeQueueItem) Parent() types.Type {
+	ln := len(tqi.Parents)
+	if ln > 0 {
+		return tqi.Parents[ln-1]
+	}
+	return nil
+}
+
 func (tqi *TypeQueueItem) SetParents(parents []types.Type) *TypeQueueItem {
 	tqi.Parents = make([]types.Type, len(parents))
 	copy(tqi.Parents, parents)
