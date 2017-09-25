@@ -272,7 +272,7 @@ func (e *extractor) extractInterface(tqi *TypeQueueItem, typ types.Type) error {
 	if e.ifaces[tn] == nil {
 		e.ifaces[tn] = newIface(tn)
 
-		ts, err := e.tpset.Implements(tn)
+		ts, err := e.tpset.FindImplementers(tn)
 		if err != nil {
 			return err
 		}

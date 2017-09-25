@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"sort"
 
 	"github.com/shabbyrobe/structer"
 )
@@ -104,6 +105,19 @@ func (s *State) Init() error {
 	}
 	s.NextID = max + 1
 	return nil
+}
+
+func (s *State) SortedNames() []structer.TypeName {
+	names := make([]structer.TypeName, len(s.Types))
+	i := 0
+	for name := range s.Types {
+		names[i] = name
+		i++
+	}
+	sort.Slice(names, func(i, j int) bool {
+		return names[i].String() < names[j].String()
+	})
+	return names
 }
 
 func (s *State) EnsureType(t structer.TypeName) (int, error) {

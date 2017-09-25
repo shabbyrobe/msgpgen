@@ -49,9 +49,11 @@ func (q *TypeQueue) AddType(originPkg string, name string, typ types.Type) *Type
 
 func (q *TypeQueue) Add(originPkg string, name string, obj types.Object, typ types.Type) *TypeQueueItem {
 	if obj == nil {
-		// we may still find nothing here - this is an ongoing pain point, mixing
-		// types.Object and types.Type and the availability of each
-		obj = q.tpset.ObjectByName(name)
+		if tn, err := structer.ParseTypeName(name); err == nil {
+			// we may still find nothing here - this is an ongoing pain point, mixing
+			// types.Object and types.Type and the availability of each
+			obj = q.tpset.FindObject(tn)
+		}
 	}
 
 	q.seenTypes[name] = true
