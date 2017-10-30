@@ -66,7 +66,7 @@ func newMsgpTypeVisitor(tpset *structer.TypePackageSet, typeQueue *TypeQueue) *m
 			//   type Foos []Foo
 			//   type FooMap map[Foo]Bar
 			//   type FooChan chan Foo
-			tn, err := structer.ParseTypeName(t.Underlying().String())
+			tn, err := structer.ParseTypeName(t.String())
 			if err != nil {
 				return errors.Wrapf(err, "msgpgen: could not parse named compound type %s", t.String())
 			}
