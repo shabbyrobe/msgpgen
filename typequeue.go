@@ -1,7 +1,6 @@
 package msgpgen
 
 import (
-	"bytes"
 	"fmt"
 	"go/types"
 
@@ -82,34 +81,66 @@ type TypeQueueItem struct {
 	Name      string
 	Obj       types.Object
 	Type      types.Type
-	Parents   []types.Type
+	Parents   TypeParents
 }
 
-func (tqi *TypeQueueItem) Parent() types.Type {
+type TypeParents []structer.TypeName
+
+func (t TypeParents) Next(tn structer.TypeName) TypeParents {
+	parents := make(TypeParents, len(t)+1)
+	for i, p := range t {
+		parents[i] = p
+	}
+	parents[len(t)] = tn
+	return parents
+}
+
+func (t TypeParents) Clone() TypeParents {
+	parents := make(TypeParents, len(t))
+	for i, p := range t {
+		parents[i] = p
+	}
+	return parents
+}
+
+func (tqi *TypeQueueItem) Parent() *structer.TypeName {
 	ln := len(tqi.Parents)
 	if ln > 0 {
-		return tqi.Parents[ln-1]
+		p := &tqi.Parents[ln-1]
+		return p
 	}
 	return nil
 }
 
-func (tqi *TypeQueueItem) SetParents(parents []types.Type) *TypeQueueItem {
-	tqi.Parents = make([]types.Type, len(parents))
+func (tqi *TypeQueueItem) SetParents(parents []structer.TypeName) *TypeQueueItem {
+	tqi.Parents = make([]structer.TypeName, len(parents))
 	copy(tqi.Parents, parents)
 	return tqi
 }
 
-func (tqi *TypeQueueItem) ParentsString() string {
-	var buf bytes.Buffer
-	for i, parent := range tqi.Parents {
-		if i > 0 {
-			buf.WriteString(" -> ")
-		}
-		buf.WriteString(parent.String())
-	}
-	return buf.String()
-}
-
 func (tqi *TypeQueueItem) Key() string {
 	return fmt.Sprintf("%s:%s", tqi.OriginPkg, tqi.Name)
+}
+
+func (tqi *TypeQueueItem) String() string {
+	out := "TypeQueueItem{"
+	out += "\n  origin: " + tqi.OriginPkg
+	out += "\n  name: " + tqi.Name
+	if len(tqi.Parents) > 0 {
+		out += "\n  parents: "
+		for i, parent := range tqi.Parents {
+			if i > 0 {
+				out += " -> "
+			}
+			out += parent.String()
+		}
+	}
+	if tqi.Type != nil {
+		out += "\n  type: " + tqi.Type.String()
+	}
+	if tqi.Obj != nil {
+		out += "\n  obj: " + tqi.Obj.String()
+	}
+	out += "\n}"
+	return out
 }

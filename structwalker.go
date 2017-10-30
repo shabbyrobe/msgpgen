@@ -12,6 +12,7 @@ type msgpTypeVisitor struct {
 	currentPkg string
 	tpset      *structer.TypePackageSet
 	typeQueue  *TypeQueue
+	queueItem  *TypeQueueItem
 }
 
 func newMsgpTypeVisitor(tpset *structer.TypePackageSet, typeQueue *TypeQueue) *msgpTypeVisitor {
@@ -43,12 +44,12 @@ func newMsgpTypeVisitor(tpset *structer.TypePackageSet, typeQueue *TypeQueue) *m
 	}
 
 	mtv.PartialTypeVisitor.VisitBasicFunc = func(ctx structer.WalkContext, t *types.Basic) error {
-		mtv.typeQueue.AddType(mtv.currentPkg, t.String(), t).SetParents(ctx.Stack())
+		mtv.typeQueue.AddType(mtv.currentPkg, t.String(), t).SetParents(mtv.queueItem.Parents)
 		return nil
 	}
 
 	mtv.PartialTypeVisitor.VisitNamedFunc = func(ctx structer.WalkContext, t *types.Named) error {
-		mtv.typeQueue.AddType(mtv.currentPkg, t.String(), t).SetParents(ctx.Stack())
+		mtv.typeQueue.AddType(mtv.currentPkg, t.String(), t).SetParents(mtv.queueItem.Parents)
 
 		if isNamedCompoundType(t) {
 			// Compound named types need to be walked as well, i.e.
@@ -65,4 +66,13 @@ func newMsgpTypeVisitor(tpset *structer.TypePackageSet, typeQueue *TypeQueue) *m
 	}
 
 	return mtv
+}
+
+func (t *msgpTypeVisitor) walk(name structer.TypeName, underlying types.Type, tqi *TypeQueueItem) error {
+	t.currentPkg = name.PackagePath
+	t.queueItem = tqi
+	err := structer.Walk(name, underlying, t)
+	t.currentPkg = ""
+	t.queueItem = nil
+	return err
 }

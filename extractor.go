@@ -97,8 +97,7 @@ func (e *extractor) extractNamedStruct(tqi *TypeQueueItem, pkg string, ft *types
 	}
 
 	// walk structs looking for new types to queue
-	e.tvis.currentPkg = pkg
-	if err := structer.Walk(tn, ft.Underlying(), e.tvis); err != nil {
+	if err := e.tvis.walk(tn, ft.Underlying(), tqi); err != nil {
 		return err
 	}
 
@@ -228,10 +227,10 @@ func (e *extractor) extract() error {
 		case *types.Basic:
 			// we should not see Basic types here - it should be caught further up
 			// when we check the directly supported primitives.
-			panic(fmt.Errorf("unsupported basic type: %s %T, parents: %s", ft.Underlying(), ft, tqi.ParentsString()))
+			panic(fmt.Errorf("unsupported basic type: %s %T:\n%s", ft.Underlying(), ft, tqi))
 
 		default:
-			panic(fmt.Errorf("main unsupported type: %s %T, parents: %s", ft.Underlying(), ft, tqi.ParentsString()))
+			panic(fmt.Errorf("main unsupported type: %s %T:\n%s", ft.Underlying(), ft, tqi))
 		}
 	}
 
@@ -289,21 +288,13 @@ func (e *extractor) extractInterface(tqi *TypeQueueItem, typ types.Type) error {
 				return err
 			}
 
-			// FIXME: double-copying the parents list here, but this is because
-			// we need to add to it.
-			parents := make([]types.Type, len(tqi.Parents)+1)
-			for i, p := range tqi.Parents {
-				parents[i] = p
-			}
-			parents[len(tqi.Parents)] = typ
-
 			// If the interface is implemented by a pointer, unwrap it before
 			// we queue it.
 			var elem types.Type = ct
 			if p, ok := ct.(*types.Pointer); ok {
 				elem = p.Elem()
 			}
-			e.typq.AddType(tqi.OriginPkg, ctn.String(), elem).SetParents(parents)
+			e.typq.AddType(tqi.OriginPkg, ctn.String(), elem).SetParents(tqi.Parents.Next(tn))
 		}
 	}
 
