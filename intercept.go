@@ -38,6 +38,7 @@ func genIntercept(pkg string, directives *Directives, state *State, iface *iface
 	// Build types
 	tv.Types = make([]tplType, 0, len(iface.types))
 	for tn, typ := range iface.types {
+		otn := tn
 		if !tn.IsExported() {
 			continue
 		}
@@ -45,6 +46,7 @@ func genIntercept(pkg string, directives *Directives, state *State, iface *iface
 		ptr := false
 		if p, ok := typ.(*types.Pointer); ok {
 			if tn, err = structer.ParseTypeName(p.Elem().String()); err != nil {
+				err = errors.Wrapf(err, "genIntercept could not resolve pointer name for %s", otn)
 				return
 			}
 			ptr = true

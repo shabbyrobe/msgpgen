@@ -66,7 +66,7 @@ func (e *extractor) extractNamedStruct(tqi *TypeQueueItem, pkg string, ft *types
 
 	tn, err := structer.ParseTypeName(ft.String())
 	if err != nil {
-		return err
+		return errors.Wrapf(err, "msgpgen: could not extract named struct from %s", tqi.Name)
 	}
 
 	// the package that uses the type is responsible for declaring //msgp:shim, // not the package that declares it, so we need to look at the referring
@@ -159,7 +159,7 @@ func (e *extractor) extractShimmedSupported(tqi *TypeQueueItem, pkg string, ft *
 		if kind == structer.UserPackage && pkg == tqi.OriginPkg {
 			tn, err := structer.ParseTypeName(ft.String())
 			if err != nil {
-				return err
+				return errors.Wrapf(err, "msgpgen: could not extract shimmed from %s", tqi.Name)
 			}
 			contents, err := e.tpset.ExtractSource(tn)
 			if err != nil {
@@ -194,7 +194,7 @@ func (e *extractor) extract() error {
 
 			tn, err := structer.ParseTypeName(ft.String())
 			if err != nil {
-				return err
+				return errors.Wrapf(err, "msgpgen: could not extract %s", tqi.Name)
 			}
 
 			if s, ok := ft.Underlying().(*types.Struct); ok {
@@ -263,7 +263,7 @@ func (e *extractor) extractInterface(tqi *TypeQueueItem, typ types.Type) error {
 
 	tn, err := structer.ParseTypeName(typ.String())
 	if err != nil {
-		return err
+		return errors.Wrapf(err, "msgpgen: could not extract interface from %s", tqi.Name)
 	}
 
 	// Find the types that implement the interface and add them to the type queue for

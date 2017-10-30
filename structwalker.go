@@ -2,7 +2,9 @@ package msgpgen
 
 import (
 	"go/types"
+	"log"
 
+	"github.com/pkg/errors"
 	"github.com/shabbyrobe/structer"
 )
 
@@ -48,6 +50,14 @@ func newMsgpTypeVisitor(tpset *structer.TypePackageSet, typeQueue *TypeQueue) *m
 		return nil
 	}
 
+	mtv.PartialTypeVisitor.VisitInvalidFunc = func(ctx structer.WalkContext, root structer.TypeName, t *types.Basic) error {
+		log.Printf("visited invalid type from root %s: %s", root, mtv.queueItem)
+		// we should not see Basic types here - it should be caught further up
+		// when we check the directly supported primitives.
+		// panic(fmt.Errorf("unsupported basic type: %s %T:\n%s", ft.Underlying(), ft, tqi))
+		return nil
+	}
+
 	mtv.PartialTypeVisitor.VisitNamedFunc = func(ctx structer.WalkContext, t *types.Named) error {
 		mtv.typeQueue.AddType(mtv.currentPkg, t.String(), t).SetParents(mtv.queueItem.Parents)
 
@@ -58,7 +68,7 @@ func newMsgpTypeVisitor(tpset *structer.TypePackageSet, typeQueue *TypeQueue) *m
 			//   type FooChan chan Foo
 			tn, err := structer.ParseTypeName(t.Underlying().String())
 			if err != nil {
-				return err
+				return errors.Wrapf(err, "msgpgen: could not parse named compound type %s", t.String())
 			}
 			return structer.Walk(tn, t.Underlying(), mtv)
 		}
