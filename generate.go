@@ -10,6 +10,8 @@ import (
 	"sort"
 	"strings"
 
+	"golang.org/x/tools/imports"
+
 	"github.com/pkg/errors"
 	"github.com/shabbyrobe/structer"
 )
@@ -42,7 +44,7 @@ func NewConfig() Config {
 	}
 }
 
-func Generate(tpset *structer.TypePackageSet, dctvCache *DirectivesCache, config Config) (err error) {
+func Generate(tpset *structer.TypePackageSet, state *State, dctvCache *DirectivesCache, config Config) (err error) {
 	if !config.valid {
 		return errors.New("please create config using NewConfig(), not Config{}")
 	}
@@ -65,7 +67,7 @@ func Generate(tpset *structer.TypePackageSet, dctvCache *DirectivesCache, config
 		typq.AddObj(t.PackagePath, typ)
 	}
 
-	ex := newExtractor(tpset, dctvCache, typq)
+	ex := newExtractor(tpset, dctvCache, typq, state)
 
 	if err = ex.extract(); err != nil {
 		return err
@@ -117,7 +119,11 @@ func Generate(tpset *structer.TypePackageSet, dctvCache *DirectivesCache, config
 			fmt.Fprintf(tf, "package %s\n\n", lpkg)
 
 			for _, d := range dctv.directives {
-				outputParts = append(outputParts, d.String())
+				dout, err := d.Build(opkg)
+				if err != nil {
+					return err
+				}
+				outputParts = append(outputParts, dout)
 			}
 
 			// consistent output ordering of temporary file should
@@ -177,6 +183,41 @@ func Generate(tpset *structer.TypePackageSet, dctvCache *DirectivesCache, config
 			}
 			if err = scanner.Err(); err != nil {
 				return err
+			}
+
+			// append any extra generated stuff to the generated output (interceptions)
+			if extra, ok := ex.extraOutput[opkg]; ok {
+				f, err := os.OpenFile(tgn, os.O_APPEND|os.O_WRONLY, 0600)
+				if err != nil {
+					panic(err)
+				}
+				func() {
+					defer func() {
+						if cerr := f.Close(); cerr != nil {
+							panic(cerr)
+						}
+					}()
+					sortOutput(extra)
+					for _, e := range extra {
+						if _, err = f.WriteString(e); err != nil {
+							panic(err)
+						}
+					}
+				}()
+
+				src, err := ioutil.ReadFile(tgn)
+				if err != nil {
+					return err
+				}
+				// imports is supposed to be able to load data from a file, but that doesn't
+				// seem to work so we have to get the src ourselves.
+				p, err := imports.Process(tgn, src, nil)
+				if err != nil {
+					return err
+				}
+				if err := ioutil.WriteFile(tgn, p, 0600); err != nil {
+					return err
+				}
 			}
 		}
 	}

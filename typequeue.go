@@ -48,9 +48,11 @@ func (q *TypeQueue) AddType(originPkg string, name string, typ types.Type) *Type
 
 func (q *TypeQueue) Add(originPkg string, name string, obj types.Object, typ types.Type) *TypeQueueItem {
 	if obj == nil {
-		// we may still find nothing here - this is an ongoing pain point, mixing
-		// types.Object and types.Type and the availability of each
-		obj = q.tpset.ObjectByName(name)
+		if tn, err := structer.ParseTypeName(name); err == nil {
+			// we may still find nothing here - this is an ongoing pain point, mixing
+			// types.Object and types.Type and the availability of each
+			obj = q.tpset.FindObject(tn)
+		}
 	}
 
 	q.seenTypes[name] = true
@@ -79,8 +81,66 @@ type TypeQueueItem struct {
 	Name      string
 	Obj       types.Object
 	Type      types.Type
+	Parents   TypeParents
+}
+
+type TypeParents []structer.TypeName
+
+func (t TypeParents) Next(tn structer.TypeName) TypeParents {
+	parents := make(TypeParents, len(t)+1)
+	for i, p := range t {
+		parents[i] = p
+	}
+	parents[len(t)] = tn
+	return parents
+}
+
+func (t TypeParents) Clone() TypeParents {
+	parents := make(TypeParents, len(t))
+	for i, p := range t {
+		parents[i] = p
+	}
+	return parents
+}
+
+func (tqi *TypeQueueItem) Parent() *structer.TypeName {
+	ln := len(tqi.Parents)
+	if ln > 0 {
+		p := &tqi.Parents[ln-1]
+		return p
+	}
+	return nil
+}
+
+func (tqi *TypeQueueItem) SetParents(parents []structer.TypeName) *TypeQueueItem {
+	tqi.Parents = make([]structer.TypeName, len(parents))
+	copy(tqi.Parents, parents)
+	return tqi
 }
 
 func (tqi *TypeQueueItem) Key() string {
 	return fmt.Sprintf("%s:%s", tqi.OriginPkg, tqi.Name)
+}
+
+func (tqi *TypeQueueItem) String() string {
+	out := "TypeQueueItem{"
+	out += "\n  origin: " + tqi.OriginPkg
+	out += "\n  name: " + tqi.Name
+	if len(tqi.Parents) > 0 {
+		out += "\n  parents: "
+		for i, parent := range tqi.Parents {
+			if i > 0 {
+				out += " -> "
+			}
+			out += parent.String()
+		}
+	}
+	if tqi.Type != nil {
+		out += "\n  type: " + tqi.Type.String()
+	}
+	if tqi.Obj != nil {
+		out += "\n  obj: " + tqi.Obj.String()
+	}
+	out += "\n}"
+	return out
 }

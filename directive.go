@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/pkg/errors"
+	"github.com/shabbyrobe/structer"
 )
 
 const linePrefix = "//msgp:"
@@ -20,7 +21,7 @@ const (
 var ShimModes = map[ShimMode]bool{Cast: true, Convert: true}
 
 type Directive interface {
-	fmt.Stringer
+	Build(pkg string) (string, error)
 	Populate(args []string, kwargs map[string]string) error
 }
 
@@ -58,10 +59,10 @@ func ParseDirective(input string) (Directive, error) {
 		directive = &ShimDirective{}
 	case "ignore":
 		directive = &IgnoreDirective{}
+	case "intercept":
+		directive = &InterceptDirective{}
 	case "tuple":
 		directive = &TupleDirective{}
-	case "map":
-		directive = &MapDirective{}
 	default:
 		return nil, fmt.Errorf("unknown directive %s", dir)
 	}
@@ -86,8 +87,16 @@ func (i *IgnoreDirective) Populate(args []string, kwargs map[string]string) erro
 	return nil
 }
 
-func (i IgnoreDirective) String() string {
-	return "//msgp:ignore " + strings.Join(i.Types, " ")
+func (i IgnoreDirective) Build(pkg string) (string, error) {
+	ts := make([]string, len(i.Types))
+	for idx, t := range i.Types {
+		tn, err := structer.ParseLocalName(t, pkg)
+		if err != nil {
+			return "", errors.Wrapf(err, "ignore directive invalid type %s", t)
+		}
+		ts[idx] = tn.ImportName(pkg, true)
+	}
+	return "//msgp:ignore " + strings.Join(ts, " "), nil
 }
 
 //msgp:tuple {TypeA} {TypeB}...
@@ -103,25 +112,58 @@ func (i *TupleDirective) Populate(args []string, kwargs map[string]string) error
 	return nil
 }
 
-func (i TupleDirective) String() string {
-	return "//msgp:tuple " + strings.Join(i.Types, " ")
-}
-
-//msgp:map {TypeA} {TypeB}...
-type MapDirective struct {
-	Types []string
-}
-
-func (i *MapDirective) Populate(args []string, kwargs map[string]string) error {
-	if len(kwargs) > 0 {
-		return errors.Errorf("invalid kwargs for map")
+func (i TupleDirective) Build(pkg string) (string, error) {
+	ts := make([]string, len(i.Types))
+	for idx, t := range i.Types {
+		tn, err := structer.ParseLocalName(t, pkg)
+		if err != nil {
+			return "", errors.Wrapf(err, "tuple directive invalid type %s", t)
+		}
+		ts[idx] = tn.ImportName(pkg, true)
 	}
-	i.Types = args
-	return nil
+	return "//msgp:tuple " + strings.Join(ts, " "), nil
 }
 
-func (i MapDirective) String() string {
-	return "//msgp:map " + strings.Join(i.Types, " ")
+//msgp:shim {Type} using:{Func}
+type InterceptDirective struct {
+	Type  string
+	Using string
+}
+
+func (i InterceptDirective) Build(pkg string) (string, error) {
+	tn, err := structer.ParseLocalName(i.Type, pkg)
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf(
+		"//msgp:intercept %s using:%s",
+		tn.ImportName(pkg, true),
+		i.Using,
+	), nil
+}
+
+func (i *InterceptDirective) Populate(args []string, kwargs map[string]string) error {
+	var ok bool
+
+	{ // type
+		if len(args) != 1 {
+			return errors.Errorf("invalid intercept directive - expected one arg, found %d", len(args))
+		}
+		i.Type = args[0]
+	}
+
+	{ // as
+		if i.Using, ok = kwargs["using"]; !ok {
+			return errors.Errorf("missing using: in intercept")
+		}
+		delete(kwargs, "using")
+	}
+
+	if len(kwargs) > 0 {
+		return errors.Errorf("unknown keys")
+	}
+
+	return nil
 }
 
 //msgp:shim {Type} as:{Newtype} using:{toFunc/fromFunc} mode:convert
@@ -133,15 +175,20 @@ type ShimDirective struct {
 	Mode     ShimMode
 }
 
-func (i ShimDirective) String() string {
+func (i ShimDirective) Build(pkg string) (string, error) {
+	tn, err := structer.ParseLocalName(i.Type, pkg)
+	if err != nil {
+		return "", errors.Wrapf(err, "shim directive invalid type %s", i.Type)
+	}
+
 	return fmt.Sprintf(
 		"//msgp:shim %s as:%s using:%s/%s mode:%s",
-		i.Type,
+		tn.ImportName(pkg, true),
 		i.As,
 		i.ToFunc,
 		i.FromFunc,
 		i.Mode,
-	)
+	), nil
 }
 
 func (i *ShimDirective) Populate(args []string, kwargs map[string]string) error {
