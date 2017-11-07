@@ -237,7 +237,7 @@ func Generate(tpset *structer.TypePackageSet, state *State, dctvCache *Directive
 			if err != nil {
 				return err
 			}
-			write = !bytes.Compare(srcb, dstb)
+			write = bytes.Compare(srcb, destb) != 0
 		}
 
 		if write {
