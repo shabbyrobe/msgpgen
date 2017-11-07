@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"fmt"
+	"io/ioutil"
 	"os"
 	"path/filepath"
 	"sort"
@@ -180,10 +181,32 @@ func Generate(tpset *structer.TypePackageSet, dctvCache *DirectivesCache, config
 		}
 	}
 
-	// move the generated file into place
+	// move the generated file into place, but only if the contents are different
 	for src, dest := range files {
-		if err := os.Rename(src, dest); err != nil {
+		write := false
+		destb, err := ioutil.ReadFile(dest)
+		if err != nil && !os.IsNotExist(err) {
 			return err
+		}
+
+		if os.IsNotExist(err) {
+			write = true
+		} else {
+			srcb, err := ioutil.ReadFile(src)
+			if err != nil {
+				return err
+			}
+			write = !bytes.Compare(srcb, dstb)
+		}
+
+		if write {
+			if err := os.Rename(src, dest); err != nil {
+				return err
+			}
+		} else {
+			if err := os.Remove(src); err != nil {
+				return err
+			}
 		}
 	}
 
