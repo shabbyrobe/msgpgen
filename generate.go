@@ -245,6 +245,7 @@ func Generate(tpset *structer.TypePackageSet, state *State, dctvCache *Directive
 				return err
 			}
 		} else {
+			fmt.Printf("unmodified: %s\n", dest)
 			if err := os.Remove(src); err != nil {
 				return err
 			}
