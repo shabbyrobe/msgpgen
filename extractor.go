@@ -69,7 +69,8 @@ func (e *extractor) extractNamedStruct(tqi *TypeQueueItem, pkg string, ft *types
 		return errors.Wrapf(err, "msgpgen: could not extract named struct from %s", tqi.Name)
 	}
 
-	// the package that uses the type is responsible for declaring //msgp:shim, // not the package that declares it, so we need to look at the referring
+	// the package that uses the type is responsible for declaring //msgp:shim,
+	// not the package that declares it, so we need to look at the referring
 	// package's directives, not the declaration's.
 	if _, ok := originDctvs.shim[tn]; ok {
 		fmt.Printf("%s: ALREADY SHIMMED\n", tqi.Name)
@@ -111,9 +112,56 @@ func (e *extractor) extractNamedStruct(tqi *TypeQueueItem, pkg string, ft *types
 	pkgDctvs.add(&TupleDirective{
 		Types: []string{findImportedName(tqi.Name, pkg)},
 	})
+	e.tempOutput[pkg] = append(e.tempOutput[pkg], "type "+string(contents))
+	// }}}
 
-	e.tempOutput[pkg] = append(e.tempOutput[pkg],
-		"type "+string(contents))
+	return nil
+}
+
+func (e *extractor) extractNamedCompound(tqi *TypeQueueItem, pkg string, ft *types.Named) error {
+	if !e.tempRendered[tqi.Name] {
+		e.tempRendered[tqi.Name] = true
+	} else {
+		return nil
+	}
+
+	pkgDctvs, err := e.dctvCache.Ensure(pkg)
+	if err != nil {
+		return err
+	}
+
+	tn, err := structer.ParseTypeName(ft.String())
+	if err != nil {
+		return errors.Wrapf(err, "msgpgen: could not extract named compound from %s", tqi.Name)
+	}
+
+	// the package that declares the type is responsible for declaring //msgp:ignore,
+	// not the package that refers to it, so we need to look at the package's directives,
+	// not the origin's.
+	if e.dctvCache.Ignored(pkgDctvs, tn) {
+		fmt.Printf("%s: IGNORING\n", tqi.Name)
+		return nil
+	}
+
+	kind := e.tpset.Kinds[pkg]
+	if kind != structer.UserPackage {
+		// don't collect the type if it is in a vendored package.
+		// This should probably be an error, you should probably shim in
+		// this case.
+
+		// FIXME: in the case of vendor packages, this could look up whether the
+		// type supports the msgpack functions - we may have enough information.
+		return fmt.Errorf("%s: type '%s' in %v package cannot be extracted - use a shim instead or write your own serialisation",
+			tqi.OriginPkg, ft.String(), kind)
+	}
+
+	// build the output {{{
+	fmt.Printf("%s: EXTRACTING\n", tqi.Name)
+	contents, err := e.tpset.ExtractSource(tn)
+	if err != nil {
+		return err
+	}
+	e.tempOutput[pkg] = append(e.tempOutput[pkg], "type "+string(contents))
 	// }}}
 
 	return nil
@@ -214,6 +262,9 @@ func (e *extractor) extract() error {
 			} else if isNamedCompoundType(ft) {
 				// seems to work OK if we just do nothing here. i thought we might need to
 				// extract the definition but I think that happens elsewhere.
+				if err := e.extractNamedCompound(tqi, pkg, ft); err != nil {
+					return err
+				}
 
 			} else if types.IsInterface(ft) {
 				if err := e.extractInterface(tqi, ft); err != nil {

@@ -42,9 +42,13 @@ func gen(loader msgpcmd.LoaderConfig, config msgpgen.Config, args []string) erro
 	tpset := structer.NewTypePackageSet()
 	dctvCache := msgpgen.NewDirectivesCache(tpset)
 
-	imports, err := msgpcmd.GoList(loader.Imports)
-	if err != nil {
-		return errors.Wrapf(err, "go list failed")
+	var imports []string
+	var err error
+	if len(loader.Imports) > 0 {
+		imports, err = msgpcmd.GoList(loader.Imports)
+		if err != nil {
+			return errors.Wrapf(err, "go list failed")
+		}
 	}
 
 	for _, imp := range imports {
@@ -56,29 +60,39 @@ func gen(loader msgpcmd.LoaderConfig, config msgpgen.Config, args []string) erro
 	}
 
 	var state *msgpgen.State
+	var types []structer.TypeName
+
 	if loader.State != "" {
 		if state, err = msgpgen.LoadStateFromFile(loader.State); err != nil {
 			return err
 		}
-	}
-
-	var types []structer.TypeName
-	if len(loader.Interfaces) == 0 {
-		return errors.Errorf("-ifaces arg required")
-	}
-
-	var ifaceNames []structer.TypeName
-	for _, i := range loader.Interfaces {
-		tn, err := structer.ParseTypeName(i)
-		if err != nil {
-			return errors.Wrapf(err, "could not parse iface type name %s", tn)
+		for t := range state.Types {
+			// FIXME: strict mode to require types
+			if o := tpset.FindObject(t); o != nil {
+				types = append(types, t)
+			}
 		}
-		ifaceNames = append(ifaceNames, tn)
 	}
 
-	types, err = msgpcmd.FindIfaces(tpset, ifaceNames...)
-	if err != nil {
-		return err
+	if len(loader.Interfaces) > 0 {
+		var ifaceNames []structer.TypeName
+		for _, i := range loader.Interfaces {
+			tn, err := structer.ParseTypeName(i)
+			if err != nil {
+				return errors.Wrapf(err, "could not parse iface type name %s", tn)
+			}
+			ifaceNames = append(ifaceNames, tn)
+		}
+
+		if itypes, err := msgpcmd.FindIfaces(tpset, ifaceNames...); err != nil {
+			return err
+		} else {
+			types = append(types, itypes...)
+		}
+	}
+
+	if len(types) == 0 {
+		return errors.Errorf("no types found in -ifaces or -state")
 	}
 
 	config.Types = types
