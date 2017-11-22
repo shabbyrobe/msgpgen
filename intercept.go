@@ -85,8 +85,8 @@ func genIntercept(pkg string, directives *Directives, state *State, iface *iface
 		err = errors.Errorf("mapper name was empty for package %s, iface %s", pkg, iface.name)
 		return
 	}
-	tv.MapperType = replacePattern.ReplaceAllString(tv.MapperType, "_")
-	tv.MapperType = strings.Trim(tv.MapperType, "_")
+	tv.MapperType = replacePattern.ReplaceAllString(tv.MapperType, "ー")
+	tv.MapperType = strings.Trim(tv.MapperType, "ー")
 	tv.MapperType = strings.ToLower(tv.MapperType[:1]) + tv.MapperType[1:]
 
 	tv.MapperVar = fmt.Sprintf("%sInstance", tv.MapperType)
