@@ -292,7 +292,7 @@ func (e *extractor) extract() error {
 			if !ok {
 				return errors.Errorf("could not find directives for package %s", inPkg)
 			}
-			buf, interceptDctv, err := genIntercept(inPkg, pkgDctvs, e.state, iface)
+			buf, interceptDctv, err := genIntercept(e.tpset, inPkg, pkgDctvs, e.state, iface)
 			if err != nil {
 				return err
 			}
