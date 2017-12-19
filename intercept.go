@@ -34,6 +34,7 @@ var replacePattern = regexp.MustCompile(`[/\.]`)
 
 func genIntercept(tpset *structer.TypePackageSet, pkg string, directives *Directives, state *State, iface *iface) (out *bytes.Buffer, intercept *InterceptDirective, err error) {
 	tv := tplVars{}
+	var localName string
 
 	// Build types
 	tv.Types = make([]tplType, 0, len(iface.types))
@@ -80,10 +81,14 @@ func genIntercept(tpset *structer.TypePackageSet, pkg string, directives *Direct
 			return
 		}
 
+		if localName, err = tpset.LocalImportName(tn, pkg); err != nil {
+			return
+		}
+
 		tt := tplType{
 			Shim:       directives.shim[tn],
 			ID:         id,
-			ImportName: tn.ImportName(pkg, true),
+			ImportName: localName,
 			Pointer:    ptr,
 		}
 		if tt.Shim != nil {
@@ -110,7 +115,9 @@ func genIntercept(tpset *structer.TypePackageSet, pkg string, directives *Direct
 	tv.MapperVar = fmt.Sprintf("%sInstance", tv.MapperType)
 	tv.Interceptor = fmt.Sprintf("%sInterceptor", tv.MapperType)
 
-	tv.OutType = iface.name.ImportName(pkg, true)
+	if tv.OutType, err = tpset.LocalImportName(iface.name, pkg); err != nil {
+		return
+	}
 
 	var tpl *template.Template
 	tpl, err = template.New("").Parse(interceptTpl)

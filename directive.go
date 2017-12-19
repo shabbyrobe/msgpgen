@@ -21,7 +21,7 @@ const (
 var ShimModes = map[ShimMode]bool{Cast: true, Convert: true}
 
 type Directive interface {
-	Build(pkg string) (string, error)
+	Build(tpset *structer.TypePackageSet, pkg string) (string, error)
 	Populate(args []string, kwargs map[string]string) error
 }
 
@@ -87,14 +87,19 @@ func (i *IgnoreDirective) Populate(args []string, kwargs map[string]string) erro
 	return nil
 }
 
-func (i IgnoreDirective) Build(pkg string) (string, error) {
+func (i IgnoreDirective) Build(tpset *structer.TypePackageSet, pkg string) (string, error) {
 	ts := make([]string, len(i.Types))
 	for idx, t := range i.Types {
 		tn, err := structer.ParseLocalName(t, pkg)
 		if err != nil {
 			return "", errors.Wrapf(err, "ignore directive invalid type %s", t)
 		}
-		ts[idx] = tn.ImportName(pkg, true)
+		ln, err := tpset.LocalImportName(tn, pkg)
+		if err != nil {
+			return "", errors.Wrapf(err, "ignore directive invalid rel name %s, %s", tn, pkg)
+		}
+		ts[idx] = ln
+
 	}
 	return "//msgp:ignore " + strings.Join(ts, " "), nil
 }
@@ -112,14 +117,18 @@ func (i *TupleDirective) Populate(args []string, kwargs map[string]string) error
 	return nil
 }
 
-func (i TupleDirective) Build(pkg string) (string, error) {
+func (i TupleDirective) Build(tpset *structer.TypePackageSet, pkg string) (string, error) {
 	ts := make([]string, len(i.Types))
 	for idx, t := range i.Types {
 		tn, err := structer.ParseLocalName(t, pkg)
 		if err != nil {
 			return "", errors.Wrapf(err, "tuple directive invalid type %s", t)
 		}
-		ts[idx] = tn.ImportName(pkg, true)
+		ln, err := tpset.LocalImportName(tn, pkg)
+		if err != nil {
+			return "", errors.Wrapf(err, "tuple directive invalid rel name %s, %s", tn, pkg)
+		}
+		ts[idx] = ln
 	}
 	return "//msgp:tuple " + strings.Join(ts, " "), nil
 }
@@ -130,16 +139,17 @@ type InterceptDirective struct {
 	Using string
 }
 
-func (i InterceptDirective) Build(pkg string) (string, error) {
+func (i InterceptDirective) Build(tpset *structer.TypePackageSet, pkg string) (string, error) {
 	tn, err := structer.ParseLocalName(i.Type, pkg)
 	if err != nil {
 		return "", err
 	}
-	return fmt.Sprintf(
-		"//msgp:intercept %s using:%s",
-		tn.ImportName(pkg, true),
-		i.Using,
-	), nil
+	ln, err := tpset.LocalImportName(tn, pkg)
+	if err != nil {
+		return "", errors.Wrapf(err, "tuple directive invalid rel name %s, %s", tn, pkg)
+	}
+
+	return fmt.Sprintf("//msgp:intercept %s using:%s", ln, i.Using), nil
 }
 
 func (i *InterceptDirective) Populate(args []string, kwargs map[string]string) error {
@@ -175,15 +185,20 @@ type ShimDirective struct {
 	Mode     ShimMode
 }
 
-func (i ShimDirective) Build(pkg string) (string, error) {
+func (i ShimDirective) Build(tpset *structer.TypePackageSet, pkg string) (string, error) {
 	tn, err := structer.ParseLocalName(i.Type, pkg)
 	if err != nil {
 		return "", errors.Wrapf(err, "shim directive invalid type %s", i.Type)
 	}
 
+	ln, err := tpset.LocalImportName(tn, pkg)
+	if err != nil {
+		return "", errors.Wrapf(err, "shim directive invalid rel name %s, %s", tn, pkg)
+	}
+
 	return fmt.Sprintf(
 		"//msgp:shim %s as:%s using:%s/%s mode:%s",
-		tn.ImportName(pkg, true),
+		ln,
 		i.As,
 		i.ToFunc,
 		i.FromFunc,

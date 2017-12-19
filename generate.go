@@ -119,7 +119,7 @@ func Generate(tpset *structer.TypePackageSet, state *State, dctvCache *Directive
 			fmt.Fprintf(tf, "package %s\n\n", lpkg)
 
 			for _, d := range dctv.directives {
-				dout, err := d.Build(opkg)
+				dout, err := d.Build(tpset, opkg)
 				if err != nil {
 					return err
 				}
