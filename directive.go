@@ -146,7 +146,7 @@ func (i InterceptDirective) Build(tpset *structer.TypePackageSet, pkg string) (s
 	}
 	ln, err := tpset.LocalImportName(tn, pkg)
 	if err != nil {
-		return "", errors.Wrapf(err, "tuple directive invalid rel name %s, %s", tn, pkg)
+		return "", errors.Wrapf(err, "intercept directive invalid rel name %s, %s", tn, pkg)
 	}
 
 	return fmt.Sprintf("//msgp:intercept %s using:%s", ln, i.Using), nil

@@ -131,7 +131,7 @@ func genIntercept(tpset *structer.TypePackageSet, pkg string, directives *Direct
 		return
 	}
 
-	intercept = &InterceptDirective{Type: tv.OutType, Using: tv.Interceptor}
+	intercept = &InterceptDirective{Type: iface.name.String(), Using: tv.Interceptor}
 	out = &buf
 	return
 }

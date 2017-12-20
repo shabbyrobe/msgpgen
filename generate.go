@@ -223,11 +223,20 @@ func Generate(tpset *structer.TypePackageSet, state *State, dctvCache *Directive
 	}
 
 	// move the generated file into place, but only if the contents are different
+	// and only if it contains more than the preamble
 	for src, dest := range files {
 		write := false
 		destb, err := ioutil.ReadFile(dest)
 		if err != nil && !os.IsNotExist(err) {
 			return err
+		}
+
+		// FIXME: this quickie hack won't consider the file as useful if it doesn't
+		// contain a function. this is to stop the situation where interfaces get
+		// extracted as the types are walked but no other types are extracted for
+		// a package.
+		if !bytes.Contains(destb, []byte("\nfunc ")) {
+			continue
 		}
 
 		if os.IsNotExist(err) {
