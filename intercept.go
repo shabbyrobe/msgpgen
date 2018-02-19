@@ -32,8 +32,9 @@ type tplVars struct {
 
 var replacePattern = regexp.MustCompile(`[/\.]`)
 
-func genIntercept(pkg string, directives *Directives, state *State, iface *iface) (out *bytes.Buffer, intercept *InterceptDirective, err error) {
+func genIntercept(tpset *structer.TypePackageSet, pkg string, directives *Directives, state *State, iface *iface) (out *bytes.Buffer, intercept *InterceptDirective, err error) {
 	tv := tplVars{}
+	var localName string
 
 	// Build types
 	tv.Types = make([]tplType, 0, len(iface.types))
@@ -43,6 +44,24 @@ func genIntercept(pkg string, directives *Directives, state *State, iface *iface
 			continue
 		}
 
+		// TypePackageSet will return a package path even if the package name
+		// is "main". Eventually structer should be fixed so PackagePath is
+		// still, say, "github.com/foo/cmd/bar" but PackageName would be "main"
+		// but this should do for now.
+		tpkg, ok := tpset.TypePackages[tn.PackagePath]
+		if !ok {
+			err = errors.Wrapf(err, "genIntercept could not resolve package name %s for %s", tn.PackagePath, iface.name)
+			return
+		}
+
+		// FIXME: Intercepts for "main" packages are all skipped by default, but
+		// maybe if the package path we are generating for matches the current
+		// type name, we don't need to skip this.
+		if tpkg.Name() == "main" {
+			continue
+		}
+
+		// resolve pointers
 		ptr := false
 		if p, ok := typ.(*types.Pointer); ok {
 			if tn, err = structer.ParseTypeName(p.Elem().String()); err != nil {
@@ -62,10 +81,14 @@ func genIntercept(pkg string, directives *Directives, state *State, iface *iface
 			return
 		}
 
+		if localName, err = tpset.LocalImportName(tn, pkg); err != nil {
+			return
+		}
+
 		tt := tplType{
 			Shim:       directives.shim[tn],
 			ID:         id,
-			ImportName: tn.ImportName(pkg, true),
+			ImportName: localName,
 			Pointer:    ptr,
 		}
 		if tt.Shim != nil {
@@ -92,7 +115,9 @@ func genIntercept(pkg string, directives *Directives, state *State, iface *iface
 	tv.MapperVar = fmt.Sprintf("%sInstance", tv.MapperType)
 	tv.Interceptor = fmt.Sprintf("%sInterceptor", tv.MapperType)
 
-	tv.OutType = iface.name.ImportName(pkg, true)
+	if tv.OutType, err = tpset.LocalImportName(iface.name, pkg); err != nil {
+		return
+	}
 
 	var tpl *template.Template
 	tpl, err = template.New("").Parse(interceptTpl)
@@ -106,7 +131,7 @@ func genIntercept(pkg string, directives *Directives, state *State, iface *iface
 		return
 	}
 
-	intercept = &InterceptDirective{Type: tv.OutType, Using: tv.Interceptor}
+	intercept = &InterceptDirective{Type: iface.name.String(), Using: tv.Interceptor}
 	out = &buf
 	return
 }

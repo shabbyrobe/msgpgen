@@ -42,6 +42,86 @@ func newExtractor(tpset *structer.TypePackageSet, dctvCache *DirectivesCache, ty
 	}
 }
 
+func (e *extractor) extract() error {
+	for {
+		tqi := e.typq.Dequeue()
+		if tqi == nil {
+			break
+		}
+
+		// If the field type is definitely supported by msgp we are golden
+		if _, ok := primitives[tqi.Type.String()]; ok {
+			// FIXME: Though maybe for whatever reason you might be shimming a
+			// msgp primitive in a specific package?
+			fmt.Printf("%s->%s: SUPPORTED DIRECTLY\n", tqi.OriginPkg, tqi.Name)
+			continue
+		}
+
+		switch ft := tqi.Type.(type) {
+		case *types.Named:
+			pkg := ft.Obj().Pkg().Path()
+
+			if s, ok := ft.Underlying().(*types.Struct); ok {
+				if err := e.extractNamedStruct(tqi, pkg, ft, s); err != nil {
+					return err
+				}
+
+			} else if _, ok := primitives[ft.Underlying().String()]; ok && !types.IsInterface(ft.Underlying()) {
+				if err := e.extractShimmedSupported(tqi, pkg, ft); err != nil {
+					return err
+				}
+
+			} else if isNamedCompoundType(ft) {
+				// seems to work OK if we just do nothing here. i thought we might need to
+				// extract the definition but I think that happens elsewhere.
+				if err := e.extractNamedCompound(tqi, pkg, ft); err != nil {
+					return err
+				}
+
+			} else if types.IsInterface(ft) {
+				// FIXME: This can cause extracted files to be full of
+				// interfaces but no definitions in situations where the
+				// interface is referred to but no other generatable types
+				// appear in the package. msgp will spit out a def file with
+				// nothing but the preamble.
+				if err := e.extractInterface(tqi, pkg, ft); err != nil {
+					return err
+				}
+
+			} else {
+				panic(fmt.Errorf("named unsupported type '%s', underlying '%s', originating '%s'", ft, ft.Underlying(), tqi.OriginPkg))
+			}
+
+		case *types.Basic:
+			// we should not see Basic types here - it should be caught further up
+			// when we check the directly supported primitives.
+			panic(fmt.Errorf("unsupported basic type: %s %T:\n%s", ft.Underlying(), ft, tqi))
+
+		default:
+			panic(fmt.Errorf("main unsupported type: %s %T:\n%s", ft.Underlying(), ft, tqi))
+		}
+	}
+
+	// build interface mappers
+	for _, iface := range e.ifaces {
+		for _, inPkg := range iface.inPackages {
+			pkgDctvs, ok := e.dctvCache.pkgDirectives[inPkg]
+			if !ok {
+				return errors.Errorf("could not find directives for package %s", inPkg)
+			}
+			buf, interceptDctv, err := genIntercept(e.tpset, inPkg, pkgDctvs, e.state, iface)
+			if err != nil {
+				return err
+			}
+			pkgDctvs.add(interceptDctv)
+
+			e.extraOutput[inPkg] = append(e.extraOutput[inPkg], buf.String())
+		}
+	}
+
+	return nil
+}
+
 func (e *extractor) extractNamedStruct(tqi *TypeQueueItem, pkg string, ft *types.Named, s *types.Struct) error {
 	// type is a named struct. we need to walk all types nested in
 	// this declaration and queue them for processing, and we also
@@ -155,14 +235,14 @@ func (e *extractor) extractNamedCompound(tqi *TypeQueueItem, pkg string, ft *typ
 			tqi.OriginPkg, ft.String(), kind)
 	}
 
-	// build the output {{{
-	fmt.Printf("%s: EXTRACTING\n", tqi.Name)
-	contents, err := e.tpset.ExtractSource(tn)
-	if err != nil {
-		return err
+	{ // build the output
+		fmt.Printf("%s: EXTRACTING\n", tqi.Name)
+		contents, err := e.tpset.ExtractSource(tn)
+		if err != nil {
+			return err
+		}
+		e.tempOutput[pkg] = append(e.tempOutput[pkg], "type "+string(contents))
 	}
-	e.tempOutput[pkg] = append(e.tempOutput[pkg], "type "+string(contents))
-	// }}}
 
 	return nil
 }
@@ -218,94 +298,11 @@ func (e *extractor) extractShimmedSupported(tqi *TypeQueueItem, pkg string, ft *
 			)
 		}
 	}
-	return nil
-}
-
-func (e *extractor) extract() error {
-	for {
-		tqi := e.typq.Dequeue()
-		if tqi == nil {
-			break
-		}
-
-		// If the field type is definitely supported by msgp we are golden
-		if _, ok := primitives[tqi.Type.String()]; ok {
-			// FIXME: Though maybe for whatever reason you might be shimming a
-			// msgp primitive in a specific package?
-			fmt.Printf("%s->%s: SUPPORTED DIRECTLY\n", tqi.OriginPkg, tqi.Name)
-			continue
-		}
-
-		switch ft := tqi.Type.(type) {
-		case *types.Named:
-			pkg := ft.Obj().Pkg().Path()
-
-			tn, err := structer.ParseTypeName(ft.String())
-			if err != nil {
-				return errors.Wrapf(err, "msgpgen: could not extract %s", tqi.Name)
-			}
-
-			if s, ok := ft.Underlying().(*types.Struct); ok {
-				if err := e.extractNamedStruct(tqi, pkg, ft, s); err != nil {
-					return err
-				}
-
-			} else if e.isIntercepted(tqi.OriginPkg, tn) {
-				// ignore for now, but eventually we can walk the list of implemented interfaces
-				// to find types that implement the intercepted interface
-
-			} else if _, ok := primitives[ft.Underlying().String()]; ok && !types.IsInterface(ft.Underlying()) {
-				if err := e.extractShimmedSupported(tqi, pkg, ft); err != nil {
-					return err
-				}
-
-			} else if isNamedCompoundType(ft) {
-				// seems to work OK if we just do nothing here. i thought we might need to
-				// extract the definition but I think that happens elsewhere.
-				if err := e.extractNamedCompound(tqi, pkg, ft); err != nil {
-					return err
-				}
-
-			} else if types.IsInterface(ft) {
-				if err := e.extractInterface(tqi, ft); err != nil {
-					return err
-				}
-
-			} else {
-				panic(fmt.Errorf("named unsupported type '%s', underlying '%s', originating '%s'", ft, ft.Underlying(), tqi.OriginPkg))
-			}
-
-		case *types.Basic:
-			// we should not see Basic types here - it should be caught further up
-			// when we check the directly supported primitives.
-			panic(fmt.Errorf("unsupported basic type: %s %T:\n%s", ft.Underlying(), ft, tqi))
-
-		default:
-			panic(fmt.Errorf("main unsupported type: %s %T:\n%s", ft.Underlying(), ft, tqi))
-		}
-	}
-
-	// build interface mappers
-	for _, iface := range e.ifaces {
-		for _, inPkg := range iface.inPackages {
-			pkgDctvs, ok := e.dctvCache.pkgDirectives[inPkg]
-			if !ok {
-				return errors.Errorf("could not find directives for package %s", inPkg)
-			}
-			buf, interceptDctv, err := genIntercept(inPkg, pkgDctvs, e.state, iface)
-			if err != nil {
-				return err
-			}
-			pkgDctvs.add(interceptDctv)
-
-			e.extraOutput[inPkg] = append(e.extraOutput[inPkg], buf.String())
-		}
-	}
 
 	return nil
 }
 
-func (e *extractor) extractInterface(tqi *TypeQueueItem, typ types.Type) error {
+func (e *extractor) extractInterface(tqi *TypeQueueItem, pkg string, typ types.Type) error {
 	// FIXME: bail if we encounter interface{}
 
 	if e.state == nil {
@@ -334,6 +331,13 @@ func (e *extractor) extractInterface(tqi *TypeQueueItem, typ types.Type) error {
 				continue
 			}
 
+			// Don't extract things from main packages - they can't be referred to
+			// from other packages.
+			n, _ := e.tpset.LocalPackageFromType(ctn)
+			if n == "main" {
+				continue
+			}
+
 			// Every interface type needs a stable ID in the state file
 			if _, err := e.state.EnsureType(ctn); err != nil {
 				return err
@@ -352,6 +356,15 @@ func (e *extractor) extractInterface(tqi *TypeQueueItem, typ types.Type) error {
 	// Add the package that referenced this interface so we can emit code into it
 	// for handling it.
 	e.ifaces[tn].addPackage(tqi.OriginPkg)
+
+	{ // build the output
+		fmt.Printf("%s: EXTRACTING\n", tqi.Name)
+		contents, err := e.tpset.ExtractSource(tn)
+		if err != nil {
+			return err
+		}
+		e.tempOutput[pkg] = append(e.tempOutput[pkg], "type "+string(contents))
+	}
 
 	return nil
 }
