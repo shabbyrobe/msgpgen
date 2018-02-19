@@ -56,6 +56,11 @@ func FindIfaces(tpset *structer.TypePackageSet, ifaces ...structer.TypeName) ([]
 
 	for _, iface := range ifaces {
 		for _, pkg := range tpset.TypePackages {
+			// "no buildable Go source files" == nil pkg.
+			if pkg == nil {
+				continue
+			}
+
 			for _, name := range pkg.Scope().Names() {
 				if obj, ok := pkg.Scope().Lookup(name).(*types.TypeName); ok {
 					nn, ok := obj.Type().(*types.Named)
