@@ -34,6 +34,7 @@ func ConfigFlags(fs *flag.FlagSet, config *msgpgen.Config) error {
 	fs.BoolVar(&config.GenIO, "io", config.GenIO, "create Encode and Decode methods")
 	fs.BoolVar(&config.GenMarshal, "marshal", config.GenMarshal, "create Encode and Decode methods")
 	fs.BoolVar(&config.GenTests, "tests", config.GenTests, "create tests and benchmarks")
+	fs.BoolVar(&config.GenVersion, "ver", config.GenVersion, "generate version files")
 	fs.BoolVar(&config.Unexported, "unexported", config.Unexported, "also process unexported types")
 	fs.BoolVar(&config.KeepTemp, "keep", config.KeepTemp, "Keep temp files used by generator")
 	fs.StringVar(&config.TempDirName, "tempdir", config.TempDirName, "Name of the temp dir used by the generator.")

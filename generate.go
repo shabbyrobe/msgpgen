@@ -3,7 +3,9 @@ package msgpgen
 import (
 	"bufio"
 	"bytes"
+	"crypto/sha256"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -17,30 +19,34 @@ import (
 )
 
 type Config struct {
-	Types        []structer.TypeName
-	GenTests     bool
-	GenIO        bool
-	GenMarshal   bool
-	Unexported   bool
-	TempDirName  string
-	FileTemplate string
-	TestTemplate string
-	KeepTemp     bool
+	Types               []structer.TypeName
+	GenTests            bool
+	GenIO               bool
+	GenMarshal          bool
+	GenVersion          bool
+	Unexported          bool
+	TempDirName         string
+	FileTemplate        string
+	TestTemplate        string
+	VersionFileTemplate string
+	KeepTemp            bool
 
 	valid bool
 }
 
 func NewConfig() Config {
 	return Config{
-		GenTests:     true,
-		GenMarshal:   true,
-		GenIO:        true,
-		Unexported:   false,
-		KeepTemp:     false,
-		TempDirName:  "_msgpgen",
-		FileTemplate: "{pkg}_msgp_gen.go",
-		TestTemplate: "{pkg}_msgp_gen_test.go",
-		valid:        true,
+		GenTests:            true,
+		GenMarshal:          true,
+		GenIO:               true,
+		GenVersion:          false,
+		Unexported:          false,
+		KeepTemp:            false,
+		TempDirName:         "_msgpgen",
+		FileTemplate:        "{pkg}_msgp_gen.go",
+		VersionFileTemplate: "msgpver",
+		TestTemplate:        "{pkg}_msgp_gen_test.go",
+		valid:               true,
 	}
 }
 
@@ -48,12 +54,7 @@ func Generate(tpset *structer.TypePackageSet, state *State, dctvCache *Directive
 	if !config.valid {
 		return errors.New("please create config using NewConfig(), not Config{}")
 	}
-	var (
-		typq         = NewTypeQueue(tpset)
-		tempDirName  = "_msgpgen"
-		fileTemplate = "{pkg}_msgp_gen.go"
-		testTemplate = "{pkg}_msgp_gen_test.go"
-	)
+	var typq = NewTypeQueue(tpset)
 
 	for _, t := range config.Types {
 		if _, err = tpset.Import(t.PackagePath); err != nil {
@@ -96,16 +97,16 @@ func Generate(tpset *structer.TypePackageSet, state *State, dctvCache *Directive
 		// FIXME: panic risk
 		pkgPath := tpset.ASTPackages.Packages[opkg].FullPath
 
-		var tempDir = filepath.Join(pkgPath, tempDirName)
+		var tempDir = filepath.Join(pkgPath, config.TempDirName)
 		os.Mkdir(tempDir, 0700)
 		cleanup.Push(tempDir)
 
-		tfn := filepath.Join(tempDir, lpkg+".go")
-		tf, err := os.OpenFile(tfn, os.O_RDWR|os.O_TRUNC|os.O_CREATE, 0700)
+		tempFileName := filepath.Join(tempDir, lpkg+".go")
+		tf, err := os.OpenFile(tempFileName, os.O_RDWR|os.O_TRUNC|os.O_CREATE, 0700)
 		if err != nil {
 			return err
 		}
-		cleanup.Push(tfn)
+		cleanup.Push(tempFileName)
 
 		dctv, err := dctvCache.Ensure(opkg)
 		if err != nil {
@@ -113,7 +114,7 @@ func Generate(tpset *structer.TypePackageSet, state *State, dctvCache *Directive
 		}
 
 		{ // generate temp file of joined definitions
-			fmt.Printf("\n======= %s %s\n", opkg, tfn)
+			fmt.Printf("\n======= %s %s\n", opkg, tempFileName)
 
 			fmt.Fprintf(tf, "// +build ignore\n\n")
 			fmt.Fprintf(tf, "package %s\n\n", lpkg)
@@ -134,6 +135,26 @@ func Generate(tpset *structer.TypePackageSet, state *State, dctvCache *Directive
 				fmt.Fprintln(tf)
 			}
 			fmt.Fprintln(tf)
+			if err := tf.Sync(); err != nil {
+				return err
+			}
+		}
+
+		// hash joined definitions
+		if config.GenVersion {
+			hash, err := hashFile(tempFileName)
+			if err != nil {
+				return err
+			}
+
+			vfn := strings.Replace(config.VersionFileTemplate, "{pkg}", lpkg, -1)
+			vfp := filepath.Join(tempDir, vfn)
+			if err := ioutil.WriteFile(vfp, []byte(hash), 0666); err != nil {
+				return err
+			}
+			cleanup.Push(vfp)
+
+			files[vfp] = filepath.Join(pkgPath, vfn)
 		}
 
 		{ // run msgp's generator
@@ -146,18 +167,18 @@ func Generate(tpset *structer.TypePackageSet, state *State, dctvCache *Directive
 			// better than having the generator spew reams of useless garbage into
 			// the terminal on every run, though.
 
-			tgnb := strings.Replace(fileTemplate, "{pkg}", lpkg, -1)
+			tgnb := strings.Replace(config.FileTemplate, "{pkg}", lpkg, -1)
 			tgn := filepath.Join(tempDir, tgnb)
 			if config.GenTests {
 				ttnb := lpkg + "_msgp_gen_test.go"
-				ttnd := strings.Replace(testTemplate, "{pkg}", lpkg, -1)
+				ttnd := strings.Replace(config.TestTemplate, "{pkg}", lpkg, -1)
 				ttn := filepath.Join(pkgPath, ttnd)
 				cleanup.Push(ttn)
 				files[filepath.Join(tempDir, ttnb)] = ttn
 			}
 			files[filepath.Join(tempDir, tgnb)] = filepath.Join(pkgPath, tgnb)
 
-			stdout, stderr, err = runMsgp(tfn, tgn, config)
+			stdout, stderr, err = runMsgp(tempFileName, tgn, config)
 			if err != nil {
 				return errors.Wrap(err, "msgp run failed")
 			}
@@ -235,7 +256,7 @@ func Generate(tpset *structer.TypePackageSet, state *State, dctvCache *Directive
 		// contain a function. this is to stop the situation where interfaces get
 		// extracted as the types are walked but no other types are extracted for
 		// a package.
-		if !bytes.Contains(destb, []byte("\nfunc ")) {
+		if filepath.Ext(dest) == ".go" && !bytes.Contains(destb, []byte("\nfunc ")) {
 			continue
 		}
 
@@ -277,4 +298,23 @@ func sortOutput(outputParts []string) {
 		bp := outputPriority(outputParts[j])
 		return ap < bp || (ap == bp && outputParts[i] < outputParts[j])
 	})
+}
+
+func hashFile(file string) (hash string, rerr error) {
+	f, err := os.Open(file)
+	if err != nil {
+		return "", err
+	}
+	defer func() {
+		if cerr := f.Close(); cerr != nil && rerr == nil {
+			rerr = cerr
+		}
+	}()
+
+	h := sha256.New()
+	if _, err = io.Copy(h, f); err != nil {
+		return "", err
+	}
+	hash = fmt.Sprintf("%x", h.Sum(nil))
+	return hash, nil
 }
