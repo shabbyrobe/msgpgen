@@ -256,9 +256,13 @@ func Generate(tpset *structer.TypePackageSet, state *State, dctvCache *Directive
 		// contain a function. this is to stop the situation where interfaces get
 		// extracted as the types are walked but no other types are extracted for
 		// a package.
-		if filepath.Ext(dest) == ".go" && !bytes.Contains(destb, []byte("\nfunc ")) {
-			continue
-		}
+		//
+		// DOUBLE FIXME: this just keeps causing bug after bug after bug. Please don't
+		// turn it back on.
+		//
+		// if filepath.Ext(dest) == ".go" && !bytes.Contains(destb, []byte("\nfunc ")) {
+		//     continue
+		// }
 
 		if os.IsNotExist(err) {
 			write = true
