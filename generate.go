@@ -30,6 +30,7 @@ type Config struct {
 	TestTemplate        string
 	VersionFileTemplate string
 	KeepTemp            bool
+	AllowExtra          bool
 
 	valid bool
 }
@@ -42,6 +43,7 @@ func NewConfig() Config {
 		GenVersion:          false,
 		Unexported:          false,
 		KeepTemp:            false,
+		AllowExtra:          false,
 		TempDirName:         "_msgpgen",
 		FileTemplate:        "{pkg}_msgp_gen.go",
 		VersionFileTemplate: "msgpver",
@@ -69,6 +71,9 @@ func Generate(tpset *structer.TypePackageSet, state *State, dctvCache *Directive
 	}
 
 	ex := newExtractor(tpset, dctvCache, typq, state)
+	if config.AllowExtra {
+		ex.defaultAllowExtra = config.AllowExtra
+	}
 
 	if err = ex.extract(); err != nil {
 		return err

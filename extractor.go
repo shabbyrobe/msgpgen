@@ -9,12 +9,13 @@ import (
 )
 
 type extractor struct {
-	typq      *TypeQueue
-	tpset     *structer.TypePackageSet
-	tvis      *msgpTypeVisitor
-	dctvCache *DirectivesCache
-	ifaces    ifaces
-	state     *State
+	typq              *TypeQueue
+	tpset             *structer.TypePackageSet
+	tvis              *msgpTypeVisitor
+	dctvCache         *DirectivesCache
+	ifaces            ifaces
+	state             *State
+	defaultAllowExtra bool
 
 	// temporary file output mapped by package name, to be joined by newlines.
 	tempOutput map[string][]string
@@ -189,9 +190,11 @@ func (e *extractor) extractNamedStruct(tqi *TypeQueueItem, pkg string, ft *types
 		return err
 	}
 
-	pkgDctvs.add(&TupleDirective{
-		Types: []string{findImportedName(tqi.Name, pkg)},
-	})
+	pkgDctvs.add(&TupleDirective{Types: []string{findImportedName(tqi.Name, pkg)}})
+	if e.defaultAllowExtra {
+		pkgDctvs.add(&AllowExtraDirective{Types: []string{findImportedName(tqi.Name, pkg)}})
+	}
+
 	e.tempOutput[pkg] = append(e.tempOutput[pkg], "type "+string(contents))
 	// }}}
 

@@ -19,9 +19,10 @@ type Directives struct {
 
 	intercepted map[structer.TypeName]string
 
-	tuple map[structer.TypeName]string
-	shim  map[structer.TypeName]*ShimDirective
-	pkg   string
+	tuple      map[structer.TypeName]string
+	allowextra map[structer.TypeName]string
+	shim       map[structer.TypeName]*ShimDirective
+	pkg        string
 }
 
 func NewDirectives(tpset *structer.TypePackageSet, pkg string) *Directives {
@@ -30,6 +31,7 @@ func NewDirectives(tpset *structer.TypePackageSet, pkg string) *Directives {
 		ignore:      make(map[structer.TypeName]string),
 		intercepted: make(map[structer.TypeName]string),
 		tuple:       make(map[structer.TypeName]string),
+		allowextra:  make(map[structer.TypeName]string),
 		shim:        make(map[structer.TypeName]*ShimDirective),
 		pkg:         pkg,
 	}
@@ -84,6 +86,15 @@ func (d *Directives) add(dirs ...Directive) error {
 					return err
 				}
 				d.tuple[tn] = t
+			}
+
+		case *AllowExtraDirective:
+			for _, t := range dir.Types {
+				tn, err := structer.ParseLocalName(t, d.pkg)
+				if err != nil {
+					return err
+				}
+				d.allowextra[tn] = t
 			}
 
 		default:

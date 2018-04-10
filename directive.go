@@ -63,6 +63,8 @@ func ParseDirective(input string) (Directive, error) {
 		directive = &InterceptDirective{}
 	case "tuple":
 		directive = &TupleDirective{}
+	case "allowextra":
+		directive = &AllowExtraDirective{}
 	default:
 		return nil, fmt.Errorf("unknown directive %s", dir)
 	}
@@ -131,6 +133,35 @@ func (i TupleDirective) Build(tpset *structer.TypePackageSet, pkg string) (strin
 		ts[idx] = ln
 	}
 	return "//msgp:tuple " + strings.Join(ts, " "), nil
+}
+
+//msgp:allowextra {TypeA} {TypeB}...
+type AllowExtraDirective struct {
+	Types []string
+}
+
+func (i *AllowExtraDirective) Populate(args []string, kwargs map[string]string) error {
+	if len(kwargs) > 0 {
+		return errors.Errorf("invalid kwargs for allowextra")
+	}
+	i.Types = args
+	return nil
+}
+
+func (i AllowExtraDirective) Build(tpset *structer.TypePackageSet, pkg string) (string, error) {
+	ts := make([]string, len(i.Types))
+	for idx, t := range i.Types {
+		tn, err := structer.ParseLocalName(t, pkg)
+		if err != nil {
+			return "", errors.Wrapf(err, "allowextra directive invalid type %s", t)
+		}
+		ln, err := tpset.LocalImportName(tn, pkg)
+		if err != nil {
+			return "", errors.Wrapf(err, "allowextra directive invalid rel name %s, %s", tn, pkg)
+		}
+		ts[idx] = ln
+	}
+	return "//msgp:allowextra " + strings.Join(ts, " "), nil
 }
 
 //msgp:shim {Type} using:{Func}
