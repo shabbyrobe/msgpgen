@@ -329,10 +329,11 @@ func (e *extractor) extractInterface(tqi *TypeQueueItem, pkg string, typ types.T
 
 		e.ifaces[tn].types = ts
 
-		for ctn, ct := range ts {
+		for _, ctn := range ts.SortedKeys() {
 			if !ctn.IsExported() {
 				continue
 			}
+			ct := ts[ctn]
 
 			// Don't extract things from main packages - they can't be referred to
 			// from other packages.
