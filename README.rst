@@ -1,6 +1,13 @@
 ``msgpgen`` - Alternative code generator wrapper for ``msgp``
 =============================================================
 
+Note: This badly needed a lick of paint before Go Modules came onto the scene,
+and should now be considered obsolete/unmaintained. Having said that, if you
+depend on this and you run into trouble with it, please open an issue and I'll
+see if I can help.
+
+-----
+
 ``msgpgen`` combines `tinylib/msgp <https://github.com/tinylib/msgp>`_ with
 `shabbyrobe/structer <https://github.com/shabbyrobe/structer>`_ to solve a few
 issues with the code generating portion of ``tinylib/msgp``.
